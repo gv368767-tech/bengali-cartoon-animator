@@ -1,3 +1,4 @@
 { "expo": { "name": "Bengali Cartoon Animator", "slug": "bengali-cartoon-animator", "version": "1.0.0",
-  "orientation": "default", "userInterfaceStyle": "dark",
-  "android": { "package": "com.bengalicartoon.animator" } } }
+  "orientation": "default",
+  "splash": { "backgroundColor": "#15171c" },
+  "android": { "package": "com.bengalicartoon.animator", "backgroundColor": "#15171c" } } }
