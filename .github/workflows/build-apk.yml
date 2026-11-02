@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+permissions:
+  contents: write
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -23,3 +25,10 @@ jobs:
         with:
           name: BengaliCartoonAnimator-apk
           path: android/app/build/outputs/apk/release/*.apk
+      - name: Publish APK to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp android/app/build/outputs/apk/release/*.apk BengaliCartoonAnimator.apk
+          gh release create "apk-${{ github.run_number }}" BengaliCartoonAnimator.apk \
+            --title "APK #${{ github.run_number }}" --notes "Bengali Cartoon Animator Android APK"
