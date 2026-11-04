@@ -1,194 +1,279 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { BackHandler, StatusBar, StyleSheet, Text, TouchableOpacity, View, LayoutChangeEvent } from "react-native";
-import DrawingCanvas, { type Onion } from "../components/DrawingCanvas";
-import Timeline from "../components/Timeline";
-import { BrushPanel, LayerPanel } from "../components/Panels";
-import * as M from "../lib/model";
-import { saveProject } from "../lib/storage";
-import { C } from "../lib/theme";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, LayoutChangeEvent, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
+import * as Sharing from "expo-sharing";
+import { StageView } from "../components/StageView";
+import { DialogueSheet, ExportSheet, LibraryPanel, LookSheet, MusicSheet } from "../components/Panels";
+import { getAsset } from "../art/registry";
+import {
+  Movie, STAGE_H, STAGE_W, addDialogue, addObject, addScene, deleteScene, dialogueAt, duplicateScene, emptyHistory, evalObj, fmtTime,
+  hitTest, History, pushHistory, redo, removeDialogue, removeKeyAt, removeObject, renameCast, setAction, setBg, setDuration, setKey, setLook,
+  undo, updateObj, updateScene, Look, dialogueLength,
+} from "../lib/scene";
+import { saveMovie } from "../lib/storage";
+import { pauseMusic, playMusic, speak, stopMusic, stopSpeech } from "../lib/audio";
+import { exportAvailable, exportMovie, Quality, saveToGallery } from "../lib/exporter";
+import { ACTION_BN, C } from "../lib/theme";
+import type { Action } from "../art/shapes";
 
-export default function EditorScreen({ initial, onExit }: { initial: M.Project; onExit: () => void }) {
-  const [project, setProject] = useState(initial);
-  const [hist, setHist] = useState<M.History>(M.emptyHistory);
-  const [idx, setIdx] = useState(0);
-  const [layerId, setLayerId] = useState(initial.layers[initial.layers.length - 1].id);
-  const [tool, setTool] = useState<M.Tool>("brush");
-  const [color, setColor] = useState("#1d1d1f");
-  const [size, setSize] = useState(8);
-  const [onion, setOnion] = useState<Onion>({ enabled: true, prev: 1, next: 0 });
+type Sheet = null | "dialogue" | "look" | "music" | "export";
+
+export default function EditorScreen({ initial, onBack }: { initial: Movie; onBack: () => void }) {
+  const { width: winW } = useWindowDimensions();
+  const stageW = Math.min(winW, 520);
+  const [movie, setMovie] = useState<Movie>(initial);
+  const [hist, setHist] = useState<History<Movie>>(emptyHistory());
+  const [si, setSi] = useState(0);
+  const [t, setT] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [loop, setLoop] = useState(true);
-  const [clip, setClip] = useState<M.Frame | null>(null);
-  const [panel, setPanel] = useState<null | "layers" | "brush">(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
-  const [toast, setToast] = useState("");
-  const [saved, setSaved] = useState(true);
+  const [sel, setSel] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [lib, setLib] = useState(true);
 
-  const projectRef = useRef(project); projectRef.current = project;
-  const idxRef = useRef(idx); idxRef.current = idx;
-  const panelRef = useRef(panel); panelRef.current = panel;
+  const scene = movie.scenes[Math.min(si, movie.scenes.length - 1)];
+  const R = useRef({ movie, scene, t, sel, hist, si, playing });
+  R.current = { movie, scene, t, sel, hist, si, playing };
 
-  const say = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(""), 1600); }, []);
-  const commit = useCallback((next: M.Project) => {
-    const prev = projectRef.current;
-    setHist((h) => M.pushHistory(h, prev));
-    projectRef.current = next; setProject(next); setSaved(false);
+  // ---- পরিবর্তন (আনডুসহ) ----
+  const commit = useCallback((fn: (m: Movie) => Movie, record = true) => {
+    const cur = R.current.movie;
+    const next = { ...fn(cur), updatedAt: Date.now() };
+    if (record) setHist((h) => pushHistory(h, cur));
+    setMovie(next);
   }, []);
 
-  // স্বয়ংক্রিয় সেভ
+  // ---- অটোসেভ ----
   useEffect(() => {
-    if (saved) return;
-    const t = setTimeout(() => { saveProject(project).then(() => setSaved(true)).catch(() => say("সেভ ব্যর্থ!")); }, 900);
-    return () => clearTimeout(t);
-  }, [project, saved, say]);
+    const id = setTimeout(() => { saveMovie(movie).catch(() => {}); }, 800);
+    return () => clearTimeout(id);
+  }, [movie]);
 
-  const exit = useCallback(async () => {
-    try { await saveProject(projectRef.current); } catch { /* ignore */ }
-    onExit();
-  }, [onExit]);
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (panelRef.current) setPanel(null); else exit();
-      return true;
-    });
-    return () => sub.remove();
-  }, [exit]);
-
-  // প্লেব্যাক
+  // ---- প্লেব্যাক ----
+  const spoken = useRef<Set<string>>(new Set());
+  const stopAll = useCallback(() => { setPlaying(false); stopSpeech(); pauseMusic(); }, []);
   useEffect(() => {
     if (!playing) return;
-    const t = setInterval(() => {
-      const n = projectRef.current.frames.length, i = idxRef.current;
-      if (i + 1 >= n) { if (loop) setIdx(0); else setPlaying(false); } else setIdx(i + 1);
-    }, 1000 / project.fps);
-    return () => clearInterval(t);
-  }, [playing, project.fps, loop]);
+    let raf = 0, last = Date.now();
+    if (R.current.movie.music) playMusic(R.current.movie.music).catch(() => {});
+    const tick = () => {
+      const now = Date.now(), dt = (now - last) / 1000; last = now;
+      const { scene: sc, t: cur, si: idx, movie: mv } = R.current;
+      let nt = cur + dt;
+      for (const d of sc.dialogues) if (nt >= d.t && cur < d.t + 0.001 && !spoken.current.has(d.id)) { spoken.current.add(d.id); speak(d.text); }
+      if (nt >= sc.duration) {
+        if (idx < mv.scenes.length - 1) { setSi(idx + 1); nt = 0; spoken.current.clear(); }
+        else { setT(sc.duration); stopAll(); return; }
+      }
+      setT(nt);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, stopAll]);
+  useEffect(() => () => { stopSpeech(); stopMusic(); }, []);
 
-  const onStroke = (s: M.Stroke) => commit(M.addStroke(projectRef.current, idxRef.current, layerId, s));
-
-  const restore = (p: M.Project) => {
-    setProject(p); projectRef.current = p; setSaved(false);
-    setIdx((i) => Math.min(i, p.frames.length - 1));
-    if (!p.layers.some((l) => l.id === layerId)) setLayerId(p.layers[p.layers.length - 1].id);
+  const togglePlay = () => {
+    if (playing) return stopAll();
+    spoken.current.clear();
+    setSel(null);
+    if (t >= scene.duration - 0.05) setT(0);
+    setPlaying(true);
   };
-  const doUndo = () => { const r = M.undo(hist, project); if (r) { setHist(r.h); restore(r.p); } };
-  const doRedo = () => { const r = M.redo(hist, project); if (r) { setHist(r.h); restore(r.p); } };
+  const playAll = () => { stopAll(); spoken.current.clear(); setSi(0); setT(0); setSel(null); setTimeout(() => setPlaying(true), 50); };
 
-  const addF = () => { if (project.frames.length >= M.MAX_FRAMES) return say("সর্বোচ্চ ফ্রেম"); commit(M.addFrame(project, idx)); setIdx(idx + 1); };
-  const dupF = () => { if (project.frames.length >= M.MAX_FRAMES) return say("সর্বোচ্চ ফ্রেম"); commit(M.duplicateFrame(project, idx)); setIdx(idx + 1); };
-  const copyF = () => { setClip(project.frames[idx]); say("ফ্রেম কপি হয়েছে"); };
-  const pasteF = () => { if (!clip) return say("আগে কপি করুন"); commit(M.pasteFrame(project, idx, clip)); setIdx(idx + 1); };
-  const delF = () => { const next = M.deleteFrame(project, idx); commit(next); setIdx(Math.min(idx, next.frames.length - 1)); };
-  const clearF = () => commit(M.clearFrame(project, idx));
+  // ---- স্টেজে টানা (ড্র্যাগ) ----
+  const dragRef = useRef<{ id: string | null }>({ id: null });
+  const pan = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => !R.current.playing,
+    onMoveShouldSetPanResponder: () => !R.current.playing,
+    onPanResponderGrant: (e) => {
+      const { scene: sc, t: tt } = R.current;
+      const x = (e.nativeEvent.locationX / stageW) * STAGE_W, y = (e.nativeEvent.locationY / stageW) * STAGE_W;
+      const id = hitTest(sc, tt, x, y);
+      dragRef.current.id = id; setSel(id);
+      if (id) setHist((h) => pushHistory(h, R.current.movie));
+    },
+    onPanResponderMove: (e) => {
+      const id = dragRef.current.id; if (!id) return;
+      const x = Math.max(0, Math.min(STAGE_W, (e.nativeEvent.locationX / stageW) * STAGE_W));
+      const y = Math.max(0, Math.min(STAGE_H, (e.nativeEvent.locationY / stageW) * STAGE_W));
+      const { scene: sc, t: tt } = R.current;
+      commit((m) => updateScene(m, sc.id, (s) => updateObj(s, id, (o) => setKey(o, tt, { x, y }))), false);
+    },
+  }), [stageW, commit]);
 
-  const onLayout = (e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height });
-  const fpsStep = (d: number) => commit(M.setFps(project, project.fps + d));
-  const secs = (project.frames.length / project.fps).toFixed(1);
+  // ---- সময়-দণ্ড (স্ক্রাব) ----
+  const [barW, setBarW] = useState(300);
+  const seek = (px: number) => { stopAll(); setT(Math.max(0, Math.min(R.current.scene.duration, (px / barW) * R.current.scene.duration))); };
+  const scrub = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true, onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => seek(e.nativeEvent.locationX), onPanResponderMove: (e) => seek(e.nativeEvent.locationX),
+  }), [barW]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- বস্তুর কাজ ----
+  const selObj = scene.objects.find((o) => o.id === sel) ?? null;
+  const selAsset = selObj ? getAsset(selObj.assetId)! : null;
+  const selCast = selObj?.castId ? movie.cast.find((c) => c.id === selObj.castId) ?? null : null;
+  const editSel = (fn: (o: NonNullable<typeof selObj>) => NonNullable<typeof selObj>) => { if (selObj) commit((m) => updateScene(m, scene.id, (s) => updateObj(s, selObj.id, fn))); };
+  const st = selObj ? evalObj(selObj, t) : null;
+
+  const add = (assetId: string, castId?: string) => {
+    stopAll();
+    const r = addObject(R.current.movie, scene.id, assetId, castId);
+    setHist((h) => pushHistory(h, R.current.movie));
+    setMovie({ ...r.movie, updatedAt: Date.now() }); setSel(r.objId);
+  };
+
+  const doUndo = () => { const r = undo(hist, movie); if (r) { setHist(r.h); setMovie(r.v); setSel(null); if (si >= r.v.scenes.length) setSi(r.v.scenes.length - 1); } };
+  const doRedo = () => { const r = redo(hist, movie); if (r) { setHist(r.h); setMovie(r.v); setSel(null); } };
+
+  // ---- এক্সপোর্ট ----
+  const [exp, setExp] = useState({ busy: false, p: 0, msg: "", result: null as string | null, error: "", warnings: [] as string[] });
+  const cancelRef = useRef(false);
+  const startExport = async (q: Quality) => {
+    stopAll(); cancelRef.current = false;
+    setExp({ busy: true, p: 0, msg: "শুরু হচ্ছে…", result: null, error: "", warnings: [] });
+    try {
+      const r = await exportMovie(R.current.movie, q, (p, msg) => setExp((e) => ({ ...e, p, msg })), () => cancelRef.current);
+      setExp((e) => ({ ...e, busy: false, result: r.path, warnings: r.warnings }));
+    } catch (e: any) {
+      setExp((x) => ({ ...x, busy: false, error: cancelRef.current ? "বাতিল করা হয়েছে" : String(e?.message ?? e) }));
+    }
+  };
+  const doSave = async () => { try { const n = await saveToGallery(exp.result!); Alert.alert("সেভ হয়েছে", "গ্যালারি/ভিডিও অ্যাপে দেখুন: " + n); } catch (e: any) { Alert.alert("ত্রুটি", String(e?.message ?? e)); } };
+  const doShare = async () => { try { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(exp.result!, { mimeType: "video/mp4" }); else Alert.alert("শেয়ার সম্ভব নয়"); } catch (e: any) { Alert.alert("ত্রুটি", String(e?.message ?? e)); } };
+
+  const dlg = dialogueAt(scene, t);
+  const dlgName = dlg ? (() => { const o = scene.objects.find((x) => x.id === dlg.objId); const cm = o?.castId ? movie.cast.find((c) => c.id === o.castId) : null; return cm?.name ?? ""; })() : "";
+  const actions: Action[] = selAsset ? (["auto", ...selAsset.actions] as Action[]) : [];
 
   return (
     <View style={s.root}>
+      {/* উপরের বার */}
       <View style={s.top}>
-        <TouchableOpacity onPress={exit}><Text style={s.topBtn}>‹ ফিরুন</Text></TouchableOpacity>
-        <Text style={s.title} numberOfLines={1}>{project.name}{saved ? "" : " •"}</Text>
-        <TouchableOpacity onPress={doUndo} disabled={!hist.past.length}><Text style={[s.topBtn, !hist.past.length && s.off]}>↶</Text></TouchableOpacity>
-        <TouchableOpacity onPress={doRedo} disabled={!hist.future.length}><Text style={[s.topBtn, !hist.future.length && s.off]}>↷</Text></TouchableOpacity>
-        <TouchableOpacity onPress={() => setPanel("layers")}><Text style={s.topBtn}>লেয়ার</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => { stopAll(); saveMovie(movie).finally(onBack); }}><Text style={s.topBtn}>← ফিরুন</Text></TouchableOpacity>
+        <Text style={s.topTitle} numberOfLines={1}>{movie.name}</Text>
+        <TouchableOpacity onPress={doUndo} disabled={!hist.past.length}><Text style={[s.ic, !hist.past.length && s.dis]}>↶</Text></TouchableOpacity>
+        <TouchableOpacity onPress={doRedo} disabled={!hist.future.length}><Text style={[s.ic, !hist.future.length && s.dis]}>↷</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => setSheet("music")}><Text style={s.ic}>🎵</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => { stopAll(); setSheet("export"); }}><Text style={[s.topBtn, { color: C.accent }]}>MP4 ⬇</Text></TouchableOpacity>
       </View>
 
-      <View style={s.stage} onLayout={onLayout}>
-        {box.w > 0 && (
-          <DrawingCanvas project={project} frameIdx={idx} layerId={layerId} tool={tool} color={color} size={size}
-            onion={onion} playing={playing} boxW={box.w - 8} boxH={box.h - 8} onStroke={onStroke} onBlocked={say} />
+      <ScrollView contentContainerStyle={{ alignItems: "center", paddingBottom: 24 }}>
+        {/* স্টেজ */}
+        <View style={{ width: stageW, height: (stageW * STAGE_H) / STAGE_W }}>
+          <StageView movie={movie} scene={scene} t={t} width={stageW} selectedId={playing ? null : sel} />
+          <View style={StyleSheet.absoluteFill} {...pan.panHandlers} />
+          {dlg && <View style={s.cap}><Text style={s.capTxt}>{dlgName ? dlgName + ": " : ""}{dlg.text}</Text></View>}
+        </View>
+
+        {/* প্লে ও সময় */}
+        <View style={[s.row, { width: stageW }]}>
+          <TouchableOpacity onPress={togglePlay} style={s.play}><Text style={s.playTxt}>{playing ? "⏸" : "▶"}</Text></TouchableOpacity>
+          <View style={{ flex: 1, marginHorizontal: 8 }}>
+            <View style={s.bar} onLayout={(e: LayoutChangeEvent) => setBarW(e.nativeEvent.layout.width)} {...scrub.panHandlers}>
+              <View style={[s.barFill, { width: `${(t / scene.duration) * 100}%` }]} />
+              {selObj?.keys.map((k, i) => <View key={i} pointerEvents="none" style={[s.mark, { left: `${(k.t / scene.duration) * 100}%`, backgroundColor: C.accent }]} />)}
+              {scene.dialogues.map((d) => <View key={d.id} pointerEvents="none" style={[s.mark, { left: `${(d.t / scene.duration) * 100}%`, backgroundColor: C.teal, top: 20 }]} />)}
+            </View>
+          </View>
+          <Text style={s.time}>{t.toFixed(1)}/{scene.duration}s</Text>
+        </View>
+        <View style={[s.row, { width: stageW, justifyContent: "space-between" }]}>
+          <TouchableOpacity onPress={playAll}><Text style={s.link}>▶ পুরো ভিডিও</Text></TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <Text style={s.dimTxt}>গতি </Text>
+            {[0.5, 1, 1.5, 2].map((v) => (
+              <TouchableOpacity key={v} onPress={() => commit((m) => ({ ...m, speed: v }))} style={[s.chip, movie.speed === v && s.chipOn]}><Text style={[s.chipTxt, movie.speed === v && { color: "#111" }]}>{v}×</Text></TouchableOpacity>))}
+          </View>
+        </View>
+
+        {/* নির্বাচিত বস্তুর টুল */}
+        {selObj && selAsset && st && !playing && (
+          <View style={[s.card, { width: stageW }]}>
+            <Text style={s.cardTitle}>{selCast?.name ?? selAsset.name} <Text style={s.dimTxt}>· {t.toFixed(1)}s-এ</Text></Text>
+            <View style={s.wrap}>
+              <Btn label="＋ বড়" onPress={() => editSel((o) => setKey(o, t, { s: Math.min(3, st.s * 1.15) }))} />
+              <Btn label="－ ছোট" onPress={() => editSel((o) => setKey(o, t, { s: Math.max(0.2, st.s / 1.15) }))} />
+              <Btn label="⟲ ঘোরান" onPress={() => editSel((o) => setKey(o, t, { r: st.r - 15 }))} />
+              <Btn label="⟳ ঘোরান" onPress={() => editSel((o) => setKey(o, t, { r: st.r + 15 }))} />
+              <Btn label="⇋ উল্টান" onPress={() => editSel((o) => ({ ...o, flip: !o.flip }))} />
+              <Btn label="📍 চাবি ও সরান" onPress={() => editSel((o) => setKey(o, t, {}))} />
+              <Btn label="✖ চাবি মোছা" onPress={() => editSel((o) => removeKeyAt(o, t))} />
+              <Btn label="🗑 বস্তু মুছুন" danger onPress={() => { commit((m) => removeObject(m, scene.id, selObj.id)); setSel(null); }} />
+            </View>
+            <Text style={s.hint}>নির্দেশ: অন্য সময়ে (সময়-দণ্ড টেনে) গিয়ে বস্তুটি সরালে সেখানে নতুন চাবি তৈরি হয়, আর মাঝখানে নিজে নিজে হেঁটে/উড়ে যায়।</Text>
+            <Text style={s.sub}>কাজ (এই সময় থেকে)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {actions.map((a) => <TouchableOpacity key={a} style={s.chip} onPress={() => editSel((o) => setAction(o, t, a))}><Text style={s.chipTxt}>{ACTION_BN[a] ?? a}</Text></TouchableOpacity>)}
+            </ScrollView>
+            <View style={[s.wrap, { marginTop: 8 }]}>
+              {selAsset.talk && <Btn label="💬 কথা বলান" onPress={() => setSheet("dialogue")} />}
+              {selCast && selAsset.cat === "human" && <Btn label="🎨 চেহারা/পোশাক" onPress={() => setSheet("look")} />}
+            </View>
+          </View>
         )}
-        {!!toast && <View style={s.toast}><Text style={{ color: "#fff" }}>{toast}</Text></View>}
-      </View>
 
-      {/* প্লেব্যাক ও অনিয়ন স্কিন */}
-      <View style={s.bar}>
-        <TouchableOpacity style={s.play} onPress={() => setPlaying((p) => !p)}>
-          <Text style={s.playTxt}>{playing ? "⏸ বিরতি" : "▶ চালান"}</Text>
-        </TouchableOpacity>
-        <Chip t={loop ? "🔁 লুপ" : "➡ একবার"} on={loop} onPress={() => setLoop(!loop)} />
-        <View style={s.fps}>
-          <TouchableOpacity onPress={() => fpsStep(-1)}><Text style={s.step}>−</Text></TouchableOpacity>
-          <Text style={s.fpsTxt}>{project.fps} FPS</Text>
-          <TouchableOpacity onPress={() => fpsStep(1)}><Text style={s.step}>＋</Text></TouchableOpacity>
+        {/* দৃশ্য-স্ট্রিপ */}
+        <View style={[s.card, { width: stageW }]}>
+          <Text style={s.cardTitle}>দৃশ্য ({movie.scenes.length}টি)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {movie.scenes.map((sc, i) => (
+              <TouchableOpacity key={sc.id} onPress={() => { stopAll(); setSi(i); setT(0); setSel(null); }} style={[s.scene, i === si && s.sceneOn]}>
+                <Text style={{ color: C.text, fontWeight: "700" }}>দৃশ্য {i + 1}</Text><Text style={s.dimTxt}>{sc.duration}s · {sc.objects.length} বস্তু</Text></TouchableOpacity>))}
+          </ScrollView>
+          <View style={[s.wrap, { marginTop: 8 }]}>
+            <Btn label="＋ নতুন দৃশ্য" onPress={() => { stopAll(); commit((m) => addScene(m, si, scene.bg)); setSi(si + 1); setT(0); setSel(null); }} />
+            <Btn label="⧉ নকল" onPress={() => { stopAll(); commit((m) => duplicateScene(m, si)); setSi(si + 1); setT(0); setSel(null); }} />
+            <Btn label="🗑 দৃশ্য মুছুন" danger onPress={() => { if (movie.scenes.length < 2) return Alert.alert("অন্তত একটি দৃশ্য থাকতে হবে"); stopAll(); commit((m) => deleteScene(m, si)); setSi(Math.max(0, si - 1)); setT(0); setSel(null); }} />
+            <Btn label="⏱ −" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration - 1))} />
+            <Btn label="⏱ ＋" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration + 1))} />
+          </View>
         </View>
-        <Text style={s.dim}>{secs}s</Text>
-      </View>
-      <View style={s.bar}>
-        <Chip t="🧅 অনিয়ন" on={onion.enabled} onPress={() => setOnion({ ...onion, enabled: !onion.enabled })} />
-        <Chip t={`আগে ${onion.prev}`} on={onion.enabled} onPress={() => setOnion({ ...onion, prev: (onion.prev + 1) % 4 })} />
-        <Chip t={`পরে ${onion.next}`} on={onion.enabled} onPress={() => setOnion({ ...onion, next: (onion.next + 1) % 4 })} />
-        <Text style={s.dim}>ফ্রেম {idx + 1}/{project.frames.length}</Text>
-      </View>
 
-      {/* টাইমলাইন + ফ্রেম অ্যাকশন */}
-      <View style={s.timeline}>
-        <Timeline frames={project.frames} idx={idx} onSelect={(i) => { setPlaying(false); setIdx(i); }} />
-        <View style={s.actions}>
-          <Act t="＋ নতুন" onPress={addF} /><Act t="⧉ ডুপ্লিকেট" onPress={dupF} />
-          <Act t="কপি" onPress={copyF} /><Act t="পেস্ট" onPress={pasteF} />
-          <Act t="সাফ" onPress={clearF} /><Act t="🗑 মুছুন" onPress={delF} danger />
+        {/* লাইব্রেরি */}
+        <View style={[{ width: stageW }]}>
+          <TouchableOpacity onPress={() => setLib(!lib)}><Text style={[s.link, { padding: 8 }]}>{lib ? "▼" : "▶"} লাইব্রেরি (ব্যাকগ্রাউন্ড, মানুষ, প্রাণী, পাখি…)</Text></TouchableOpacity>
+          {lib && <LibraryPanel movie={movie} scene={scene} onAdd={add} onBg={(id) => commit((m) => setBg(m, scene.id, id))} />}
         </View>
-      </View>
+      </ScrollView>
 
-      {/* টুল */}
-      <View style={s.tools}>
-        {([["brush", "🖌 ব্রাশ"], ["pencil", "✏ পেনসিল"], ["eraser", "⌫ ইরেজার"]] as const).map(([k, label]) => (
-          <TouchableOpacity key={k} style={[s.tool, tool === k && s.toolOn]} onPress={() => setTool(k)}>
-            <Text style={[s.toolTxt, tool === k && { color: "#111" }]}>{label}</Text>
-          </TouchableOpacity>
-        ))}
-        <TouchableOpacity style={s.colorBtn} onPress={() => setPanel("brush")}>
-          <View style={[s.colorDot, { backgroundColor: color }]} /><Text style={s.dim}>{size}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {panel === "layers" && (
-        <LayerPanel project={project} layerId={layerId} onClose={() => setPanel(null)}
-          onSelect={setLayerId}
-          onAdd={() => { const n = M.addLayer(project); commit(n); setLayerId(n.layers[n.layers.length - 1].id); }}
-          onRemove={(id) => { const n = M.removeLayer(project, id); if (n === project) return say("শেষ লেয়ার মোছা যায় না"); commit(n); if (id === layerId) setLayerId(n.layers[n.layers.length - 1].id); }}
-          onToggle={(id) => commit(M.toggleLayer(project, id))}
-          onMove={(id, d) => commit(M.moveLayer(project, id, d))} />
+      {sheet === "dialogue" && selObj && (
+        <DialogueSheet movie={movie} scene={scene} objId={selObj.id} t={t} onClose={() => setSheet(null)}
+          onAdd={(text) => { commit((m) => updateScene(m, scene.id, (sc) => addDialogue(sc, selObj.id, t, text))); speak(text); }}
+          onRemove={(id) => commit((m) => updateScene(m, scene.id, (sc) => removeDialogue(sc, id)))} />
       )}
-      {panel === "brush" && <BrushPanel color={color} size={size} onColor={setColor} onSize={setSize} onClose={() => setPanel(null)} />}
+      {sheet === "look" && selCast && (
+        <LookSheet cast={selCast} onClose={() => setSheet(null)} onLook={(l: Look) => commit((m) => setLook(m, selCast.id, l))} onRename={(n) => commit((m) => renameCast(m, selCast.id, n))} />
+      )}
+      {sheet === "music" && <MusicSheet current={movie.music} onClose={() => setSheet(null)} onPick={(id) => { commit((m) => ({ ...m, music: id })); if (!id) stopMusic(); else playMusic(id).catch(() => {}); }} />}
+      {sheet === "export" && (
+        <ExportSheet available={exportAvailable()} busy={exp.busy} progress={exp.p} msg={exp.msg} result={exp.result} error={exp.error} warnings={exp.warnings}
+          onStart={startExport} onCancel={() => { cancelRef.current = true; }} onSave={doSave} onShare={doShare} onClose={() => { setSheet(null); setExp((e) => ({ ...e, result: null, error: "" })); }} />
+      )}
     </View>
   );
 }
 
-const Chip = ({ t, on, onPress }: { t: string; on?: boolean; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} style={[s.chip, on && s.chipOn]}><Text style={[s.chipTxt, on && { color: "#111" }]}>{t}</Text></TouchableOpacity>
-);
-const Act = ({ t, onPress, danger }: { t: string; onPress: () => void; danger?: boolean }) => (
-  <TouchableOpacity onPress={onPress} style={s.act}><Text style={[s.actTxt, danger && { color: C.danger }]}>{t}</Text></TouchableOpacity>
-);
+function Btn({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
+  return <TouchableOpacity onPress={onPress} style={[s.btn, danger && { backgroundColor: "#4a2a2e" }]}><Text style={[s.btnTxt, danger && { color: C.danger }]}>{label}</Text></TouchableOpacity>;
+}
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg, paddingTop: StatusBar.currentHeight ?? 24 },
-  top: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, height: 46 },
-  topBtn: { color: C.accent, fontSize: 17, fontWeight: "700", paddingHorizontal: 10 },
-  off: { opacity: 0.3 },
-  title: { flex: 1, color: C.text, fontSize: 16, fontWeight: "600", textAlign: "center" },
-  stage: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#0e1014" },
-  toast: { position: "absolute", bottom: 12, backgroundColor: "#000c", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
-  bar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 5, backgroundColor: C.panel },
-  play: { backgroundColor: C.teal, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, marginRight: 8 },
-  playTxt: { color: "#06201d", fontWeight: "800" },
-  fps: { flexDirection: "row", alignItems: "center", backgroundColor: C.panel2, borderRadius: 12, marginLeft: 6, paddingHorizontal: 4 },
-  step: { color: C.text, fontSize: 20, paddingHorizontal: 10, paddingVertical: 3 },
-  fpsTxt: { color: C.text, fontWeight: "700", minWidth: 58, textAlign: "center" },
-  dim: { color: C.dim, marginLeft: "auto", fontSize: 13 },
-  chip: { paddingHorizontal: 11, paddingVertical: 8, borderRadius: 14, backgroundColor: C.panel2, marginRight: 6 },
-  chipOn: { backgroundColor: C.accent }, chipTxt: { color: C.text, fontSize: 13, fontWeight: "600" },
-  timeline: { backgroundColor: C.panel },
-  actions: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 8, paddingBottom: 6 },
-  act: { paddingHorizontal: 8, paddingVertical: 8, backgroundColor: C.panel2, borderRadius: 10 },
-  actTxt: { color: C.text, fontSize: 12.5, fontWeight: "600" },
-  tools: { flexDirection: "row", alignItems: "center", padding: 8, backgroundColor: C.panel, borderTopWidth: 1, borderTopColor: C.line },
-  tool: { flex: 1, paddingVertical: 12, marginRight: 6, borderRadius: 12, backgroundColor: C.panel2, alignItems: "center" },
-  toolOn: { backgroundColor: C.accent }, toolTxt: { color: C.text, fontWeight: "700", fontSize: 13 },
-  colorBtn: { alignItems: "center", paddingHorizontal: 8 },
-  colorDot: { width: 34, height: 34, borderRadius: 17, borderWidth: 3, borderColor: C.text },
+  root: { flex: 1, backgroundColor: C.bg },
+  top: { flexDirection: "row", alignItems: "center", paddingTop: 36, paddingBottom: 8, paddingHorizontal: 10, backgroundColor: C.panel },
+  topBtn: { color: C.text, fontWeight: "700", fontSize: 14, marginHorizontal: 6 }, topTitle: { flex: 1, color: C.text, fontWeight: "700", fontSize: 15, marginHorizontal: 6 },
+  ic: { color: C.text, fontSize: 22, marginHorizontal: 8 }, dis: { opacity: 0.3 },
+  row: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 6 },
+  play: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.accent, alignItems: "center", justifyContent: "center" }, playTxt: { fontSize: 20, color: "#111" },
+  bar: { height: 34, backgroundColor: C.panel2, borderRadius: 8, overflow: "hidden", justifyContent: "center" },
+  barFill: { position: "absolute", left: 0, top: 0, bottom: 0, backgroundColor: "#FFB02055" },
+  mark: { position: "absolute", top: 4, width: 6, height: 10, borderRadius: 3 },
+  time: { color: C.dim, fontSize: 12, minWidth: 54, textAlign: "right" },
+  cap: { position: "absolute", left: 10, right: 10, bottom: 8, backgroundColor: "#000a", borderRadius: 8, padding: 6 }, capTxt: { color: "#fff", textAlign: "center", fontSize: 15 },
+  card: { backgroundColor: C.panel, borderRadius: 14, padding: 10, marginTop: 8 }, cardTitle: { color: C.text, fontWeight: "700", fontSize: 15, marginBottom: 6 },
+  wrap: { flexDirection: "row", flexWrap: "wrap" },
+  btn: { backgroundColor: C.panel2, paddingHorizontal: 11, paddingVertical: 9, borderRadius: 10, marginRight: 6, marginBottom: 6 }, btnTxt: { color: C.text, fontSize: 13, fontWeight: "600" },
+  chip: { backgroundColor: C.panel2, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 14, marginRight: 6 }, chipOn: { backgroundColor: C.accent }, chipTxt: { color: C.text, fontSize: 13 },
+  hint: { color: C.dim, fontSize: 11, marginVertical: 4 }, sub: { color: C.dim, fontSize: 12, marginBottom: 4 }, dimTxt: { color: C.dim, fontSize: 12 }, link: { color: C.accent, fontWeight: "700" },
+  scene: { backgroundColor: C.panel2, padding: 10, borderRadius: 10, marginRight: 8, minWidth: 96 }, sceneOn: { borderWidth: 2, borderColor: C.accent },
 });
