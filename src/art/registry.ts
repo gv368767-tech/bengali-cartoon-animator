@@ -3,6 +3,7 @@ import { HUMANS, humanShapes } from "./human";
 import { ANIMALS, quadShapes } from "./animal";
 import { BIRDS, birdShapes } from "./bird";
 import * as P from "./props";
+import { ANIMS } from "./anim";
 import { BACKGROUNDS } from "./backgrounds";
 
 export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object";
@@ -18,7 +19,7 @@ export type AssetDef = {
   build: (p: Pose) => Shape[];
 };
 
-const HA: Action[] = ["stand", "walk", "run", "jump", "sit", "dance", "wave"];
+const HA: Action[] = ANIMS.map((a) => a.id);
 const human = (id: string, name: string, scale: number, top: number): AssetDef => ({
   id, name, cat: "human", layer: "ground", scale, defaultY: 600, actions: HA, defaultAction: "stand", shadow: 50, side: false, talk: true,
   bounds: [-80, top, 80, 8], build: (p) => humanShapes(HUMANS[id], p),

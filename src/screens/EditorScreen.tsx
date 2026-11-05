@@ -3,19 +3,21 @@ import { Alert, LayoutChangeEvent, PanResponder, ScrollView, StyleSheet, Text, T
 import * as Sharing from "expo-sharing";
 import { StageView } from "../components/StageView";
 import { DialogueSheet, ExportSheet, LibraryPanel, LookSheet, MusicSheet } from "../components/Panels";
+import AnimationPanel from "../components/AnimationPanel";
 import { getAsset } from "../art/registry";
 import {
   Movie, STAGE_H, STAGE_W, addDialogue, addObject, addScene, deleteScene, dialogueAt, duplicateScene, emptyHistory, evalObj, fmtTime,
   hitTest, History, pushHistory, redo, removeDialogue, removeKeyAt, removeObject, renameCast, setAction, setBg, setDuration, setKey, setLook,
-  undo, updateObj, updateScene, Look, dialogueLength,
+  undo, updateObj, updateScene, Look, dialogueLength, setView, viewAt, actionAt,
 } from "../lib/scene";
 import { saveMovie } from "../lib/storage";
 import { pauseMusic, playMusic, speak, stopMusic, stopSpeech } from "../lib/audio";
 import { exportAvailable, exportMovie, Quality, saveToGallery } from "../lib/exporter";
 import { ACTION_BN, C } from "../lib/theme";
-import type { Action } from "../art/shapes";
+import type { Action, View as ViewT } from "../art/shapes";
+import { animName } from "../art/anim";
 
-type Sheet = null | "dialogue" | "look" | "music" | "export";
+type Sheet = null | "dialogue" | "look" | "music" | "export" | "anim";
 
 export default function EditorScreen({ initial, onBack }: { initial: Movie; onBack: () => void }) {
   const { width: winW } = useWindowDimensions();
@@ -28,6 +30,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
   const [sel, setSel] = useState<string | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [lib, setLib] = useState(true);
+  const [animT, setAnimT] = useState(0);
 
   const scene = movie.scenes[Math.min(si, movie.scenes.length - 1)];
   const R = useRef({ movie, scene, t, sel, hist, si, playing });
@@ -81,7 +84,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
   const playAll = () => { stopAll(); spoken.current.clear(); setSi(0); setT(0); setSel(null); setTimeout(() => setPlaying(true), 50); };
 
   // ---- স্টেজে টানা (ড্র্যাগ) ----
-  const dragRef = useRef<{ id: string | null }>({ id: null });
+  const dragRef = useRef<{ id: string | null; moved: boolean; sx: number; sy: number }>({ id: null, moved: false, sx: 0, sy: 0 });
   const pan = useMemo(() => PanResponder.create({
     onStartShouldSetPanResponder: () => !R.current.playing,
     onMoveShouldSetPanResponder: () => !R.current.playing,
@@ -89,17 +92,42 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
       const { scene: sc, t: tt } = R.current;
       const x = (e.nativeEvent.locationX / stageW) * STAGE_W, y = (e.nativeEvent.locationY / stageW) * STAGE_W;
       const id = hitTest(sc, tt, x, y);
-      dragRef.current.id = id; setSel(id);
-      if (id) setHist((h) => pushHistory(h, R.current.movie));
+      dragRef.current = { id, moved: false, sx: e.nativeEvent.locationX, sy: e.nativeEvent.locationY };
+      setSel(id);
     },
     onPanResponderMove: (e) => {
-      const id = dragRef.current.id; if (!id) return;
+      const d = dragRef.current; if (!d.id) return;
+      if (!d.moved) {
+        if (Math.hypot(e.nativeEvent.locationX - d.sx, e.nativeEvent.locationY - d.sy) < 7) return;
+        d.moved = true; setHist((h) => pushHistory(h, R.current.movie));
+      }
+      const id = d.id;
       const x = Math.max(0, Math.min(STAGE_W, (e.nativeEvent.locationX / stageW) * STAGE_W));
       const y = Math.max(0, Math.min(STAGE_H, (e.nativeEvent.locationY / stageW) * STAGE_W));
       const { scene: sc, t: tt } = R.current;
       commit((m) => updateScene(m, sc.id, (s) => updateObj(s, id, (o) => setKey(o, tt, { x, y }))), false);
     },
+    onPanResponderRelease: () => {
+      const d = dragRef.current;
+      if (d.id && !d.moved) { // শুধু ট্যাপ — মানুষ হলে অ্যানিমেশন প্যানেল খুলুন
+        const o = R.current.scene.objects.find((x) => x.id === d.id);
+        if (o && getAsset(o.assetId)?.cat === "human") { setAnimT(R.current.t); setSheet("anim"); }
+      }
+    },
   }), [stageW, commit]);
+
+  // ---- অ্যানিমেশন প্যানেল খোলা থাকলে স্টেজেও ৩ সেকেন্ডের লুপে চলে ----
+  useEffect(() => {
+    if (sheet !== "anim") return;
+    let raf = 0; const t0 = Date.now();
+    const f = () => {
+      const dur = R.current.scene.duration;
+      setT(Math.min(dur - 0.01, animT + (((Date.now() - t0) / 1000) % 3)));
+      raf = requestAnimationFrame(f);
+    };
+    raf = requestAnimationFrame(f);
+    return () => { cancelAnimationFrame(raf); setT(animT); };
+  }, [sheet, animT]);
 
   // ---- সময়-দণ্ড (স্ক্রাব) ----
   const [barW, setBarW] = useState(300);
@@ -174,6 +202,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
               <View style={[s.barFill, { width: `${(t / scene.duration) * 100}%` }]} />
               {selObj?.keys.map((k, i) => <View key={i} pointerEvents="none" style={[s.mark, { left: `${(k.t / scene.duration) * 100}%`, backgroundColor: C.accent }]} />)}
               {scene.dialogues.map((d) => <View key={d.id} pointerEvents="none" style={[s.mark, { left: `${(d.t / scene.duration) * 100}%`, backgroundColor: C.teal, top: 20 }]} />)}
+              {selObj?.acts.map((a, i) => <View key={"a" + i} pointerEvents="none" style={[s.mark, { left: `${(a.t / scene.duration) * 100}%`, backgroundColor: "#b07cff", top: 12, height: 8 }]} />)}
             </View>
           </View>
           <Text style={s.time}>{t.toFixed(1)}/{scene.duration}s</Text>
@@ -207,6 +236,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
               {actions.map((a) => <TouchableOpacity key={a} style={s.chip} onPress={() => editSel((o) => setAction(o, t, a))}><Text style={s.chipTxt}>{ACTION_BN[a] ?? a}</Text></TouchableOpacity>)}
             </ScrollView>
             <View style={[s.wrap, { marginTop: 8 }]}>
+              {selAsset.cat === "human" && <Btn label="🎭 অ্যানিমেশন" onPress={() => { setAnimT(t); setSheet("anim"); }} />}
               {selAsset.talk && <Btn label="💬 কথা বলান" onPress={() => setSheet("dialogue")} />}
               {selCast && selAsset.cat === "human" && <Btn label="🎨 চেহারা/পোশাক" onPress={() => setSheet("look")} />}
             </View>
@@ -237,6 +267,17 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
         </View>
       </ScrollView>
 
+      {sheet === "anim" && selObj && selAsset && selAsset.cat === "human" && (
+        <AnimationPanel
+          name={selCast?.name ?? selAsset.name} asset={selAsset} look={selCast?.look as Look | undefined}
+          curAction={actionAt(selObj, selAsset, animT) as any} curView={viewAt(selObj, animT) as ViewT} t={animT}
+          onClose={() => setSheet(null)}
+          onAction={(a) => editSel((o) => setAction(o, animT, a))}
+          onAuto={() => editSel((o) => setAction(o, animT, "auto"))}
+          onView={(v) => editSel((o) => setView(o, animT, v))}
+          onSpeakAdd={(text) => { if (text.trim()) commit((m) => updateScene(m, scene.id, (sc) => addDialogue(sc, selObj.id, animT, text))); }}
+        />
+      )}
       {sheet === "dialogue" && selObj && (
         <DialogueSheet movie={movie} scene={scene} objId={selObj.id} t={t} onClose={() => setSheet(null)}
           onAdd={(text) => { commit((m) => updateScene(m, scene.id, (sc) => addDialogue(sc, selObj.id, t, text))); speak(text); }}

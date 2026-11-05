@@ -5,7 +5,7 @@ import { Movie, newMovie } from "../lib/scene";
 import { TOTAL_ASSETS } from "../art/registry";
 import { C } from "../lib/theme";
 
-export default function HomeScreen({ onOpen, onLibrary }: { onOpen: (m: Movie) => void; onLibrary: () => void }) {
+export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: Movie) => void; onLibrary: () => void; onDemo: () => void }) {
   const [list, setList] = useState<Meta[]>([]);
   const [name, setName] = useState("");
   const refresh = useCallback(() => { listMovies().then(setList).catch(() => setList([])); }, []);
@@ -21,6 +21,7 @@ export default function HomeScreen({ onOpen, onLibrary }: { onOpen: (m: Movie) =
         <TouchableOpacity style={s.btn} onPress={create}><Text style={s.btnTxt}>＋ নতুন</Text></TouchableOpacity>
       </View>
       <TouchableOpacity onPress={onLibrary} style={s.lib}><Text style={{ color: C.text, fontWeight: "700" }}>📚 অ্যাসেট লাইব্রেরি দেখুন ({TOTAL_ASSETS}টি)</Text></TouchableOpacity>
+      <TouchableOpacity onPress={onDemo} style={[s.lib, { backgroundColor: "#1d3b37" }]}><Text style={{ color: C.text, fontWeight: "700" }}>🎭 অ্যানিমেশন ডেমো — ৩০টি অ্যানিমেশন চালিয়ে দেখুন</Text></TouchableOpacity>
       <Text style={s.h2}>সেভ করা প্রজেক্ট</Text>
       <FlatList data={list} keyExtractor={(m) => m.id} ListEmptyComponent={<Text style={{ color: C.dim }}>এখনও কোনো প্রজেক্ট নেই।</Text>}
         renderItem={({ item }) => (

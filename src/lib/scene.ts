@@ -1,5 +1,6 @@
 // খাঁটি (pure) দৃশ্য-মডেল — UI ছাড়া, তাই আলাদা টেস্ট করা যায়।
-import { Action } from "../art/shapes";
+import { Action, Mouth, View } from "../art/shapes";
+import { mouthAt } from "./lipsync";
 import { AssetDef, getAsset, getBg } from "../art/registry";
 import { HumanDef } from "../art/human";
 
@@ -8,7 +9,8 @@ export type Key = { t: number; x: number; y: number; s: number; r: number };
 export type Act = { t: number; action: Action };
 export type Look = Partial<Pick<HumanDef, "skin" | "hair" | "top" | "bottom">>;
 export type CastMember = { id: string; assetId: string; name: string; look?: Look };
-export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[] };
+export type ViewKey = { t: number; view: View };
+export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[]; views?: ViewKey[] };
 export type Dialogue = { id: string; objId: string; t: number; dur: number; text: string };
 export type Scene = { id: string; bg: string; duration: number; objects: Obj[]; dialogues: Dialogue[] };
 export type Movie = {
@@ -124,14 +126,15 @@ export function setAction(o: Obj, t: number, action: Action): Obj {
 export function actionAt(o: Obj, a: AssetDef, t: number): Exclude<Action, "auto"> {
   let act: Action = "auto";
   for (const x of o.acts) if (x.t <= t + 1e-6) act = x.action;
-  if (act !== "auto") return act === "fly" && !a.actions.includes("fly") ? a.defaultAction : (act as Exclude<Action, "auto">);
+  if (act !== "auto") return !a.actions.includes(act) ? a.defaultAction : (act as Exclude<Action, "auto">);
   const v = speedAt(o, t);
   if (a.defaultAction === "fly") return "fly";
   if (v > 320 && a.actions.includes("run")) return "run";
   if (v > 8 && a.actions.includes("walk")) return "walk";
   return a.defaultAction;
 }
-const RATE: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2 };
+const RATE: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2, talk: 4, clap: 6, salute: 2, point: 4, thumbsup: 4, namaste: 3, bow: 2.2, shrug: 3, cheer: 7, angry: 5, laugh: 6, cry: 4, scared: 6, think: 2.5, cook: 4, teach: 3, carry: 7, read: 2, write: 4, eat: 4, drink: 3, phone: 4, sleep: 2.5 };
+export const rateOf = (act: string) => RATE[act] ?? 2;
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000; return h / 160; };
 export function phaseAt(o: Obj, a: AssetDef, act: string, t: number, speed: number): number {
   const v = speedAt(o, t);
@@ -141,6 +144,21 @@ export function phaseAt(o: Obj, a: AssetDef, act: string, t: number, speed: numb
 export function talkAt(s: Scene, objId: string, t: number): number {
   for (const d of s.dialogues) if (d.objId === objId && t >= d.t && t <= d.t + d.dur) return 0.35 + 0.65 * Math.abs(Math.sin(t * 17));
   return 0;
+}
+export function mouthOf(s: Scene, objId: string, t: number): Mouth | null {
+  for (const d of s.dialogues) if (d.objId === objId && t >= d.t && t <= d.t + d.dur) return mouthAt(d.text, t - d.t, d.dur);
+  return null;
+}
+export function viewAt(o: Obj, t: number): View {
+  let v: View = "front";
+  for (const k of o.views ?? []) if (k.t <= t + 1e-6) v = k.view;
+  return v;
+}
+/** এই সময় থেকে ভিউ বদলান (আগের ভিউ-চাবি একই সময়ে থাকলে বদলে যায়) */
+export function setView(o: Obj, t: number, view: View): Obj {
+  const tt = Math.round(t * 100) / 100;
+  const rest = (o.views ?? []).filter((k) => Math.abs(k.t - tt) >= 0.05);
+  return { ...o, views: [...rest, { t: tt, view }].sort((a, b) => a.t - b.t) };
 }
 export const blinkAt = (o: Obj, t: number) => ((t + hash(o.id) * 3) % 3.4) < 0.12;
 export const depthScale = (y: number, horizon: number) => 0.5 + 0.5 * clamp((y - horizon) / (STAGE_H - horizon), 0, 1);
@@ -160,7 +178,9 @@ export function placed(s: Scene, t: number): Placed[] {
   const bg = getBg(s.bg);
   const list: Placed[] = s.objects.map((obj) => {
     const asset = getAsset(obj.assetId)!;
-    const st = evalObj(obj, t), act = actionAt(obj, asset, t);
+    const st = evalObj(obj, t);
+    let act = actionAt(obj, asset, t);
+    if (asset.cat === "human" && act === "stand" && s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur)) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
     const air = act === "fly";
     const eff = st.s * (asset.layer === "back" || air ? 1 : depthScale(st.y, bg.horizon));
     return { obj, asset, st, act, air, eff, flip: asset.side ? facingLeft(obj, t) : obj.flip };

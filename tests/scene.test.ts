@@ -93,4 +93,61 @@ assert.equal(S.movieDuration(sm), 18);
 // আনডু
 let h = S.emptyHistory<number>(); h = S.pushHistory(h, 1);
 const u = S.undo(h, 2)!; assert.equal(u.v, 1); assert.equal(S.redo(u.h, u.v)!.v, 2);
+
+// ---------- অ্যানিমেশন লাইব্রেরি: ৩০টি অ্যানিমেশন × ৫টি ভিউ × ৮ চরিত্র ----------
+import { ANIMS, VIEWS, searchAnims } from "../src/art/anim";
+import { mouthAt, tokenize } from "../src/lib/lipsync";
+import { buildAsset } from "../src/lib/render";
+assert.equal(ANIMS.length, 30);
+assert.equal(VIEWS.length, 5);
+for (const h of ASSETS.filter((a) => a.cat === "human")) {
+  assert.equal(h.actions.length, ANIMS.length, "মানুষের সব অ্যানিমেশন নেই");
+  for (const an of ANIMS) for (const v of VIEWS) for (const ph of [0, 0.9, 2.1, 4]) {
+    const sh = buildAsset(h, { action: an.id as any, phase: ph, talk: 0, blink: ph === 0, view: v.id });
+    assert.ok(sh.length > 10, `${h.id}/${an.id}/${v.id} খালি`);
+    assert.ok(JSON.stringify(sh).indexOf("NaN") < 0, `${h.id}/${an.id}/${v.id} NaN`);
+  }
+}
+// প্রতিটি অ্যানিমেশন সময়ের সাথে সত্যিই বদলায় (স্থির ছবি নয়)
+const animBoy = ASSETS.find((a) => a.id === "boy")!;
+for (const an of ANIMS) {
+  const f1 = JSON.stringify(buildAsset(animBoy, { action: an.id as any, phase: 0.3, talk: 0, blink: false }));
+  const f2 = JSON.stringify(buildAsset(animBoy, { action: an.id as any, phase: 1.7, talk: 0, blink: false }));
+  assert.notEqual(f1, f2, `${an.id} নড়ছে না`);
+}
+// ভিউ বদলালে ছবি আলাদা হয়
+const vs = new Set(VIEWS.map((v) => JSON.stringify(buildAsset(animBoy, { action: "stand", phase: 0, talk: 0, blink: false, view: v.id }))));
+assert.equal(vs.size, 5);
+// সার্চ
+assert.deepEqual(searchAnims("রান্না").map((a) => a.id), ["cook"]);
+assert.ok(searchAnims("walk").some((a) => a.id === "walk"));
+assert.equal(searchAnims("zzz").length, 0);
+assert.equal(searchAnims("", "emotion").length, 5);
+// লিপ-সিঙ্ক: বাংলা লেখা থেকে বিভিন্ন ঠোঁটের আকৃতি
+const shapes = new Set(tokenize("নমস্কার, আমি তোমার বন্ধু।").map((t) => t.m.shape));
+for (const x of ["A", "E", "O", "M", "C"]) assert.ok(shapes.has(x as any), `আকৃতি ${x} নেই`);
+const seen = new Set<string>();
+for (let t = 0; t < 2; t += 0.05) { const m = mouthAt("নমস্কার, আমি তোমার বন্ধু।", t, 2); if (m) seen.add(m.shape); }
+assert.ok(seen.size >= 4);
+assert.equal(mouthAt("আমি", 5, 2), null);
+// দৃশ্যে: ভিউ/অ্যানিমেশন সময়ভেদে বদলানো + সংলাপে স্বয়ংক্রিয় talk + মুখের আকৃতি
+{
+  let mm = S.newMovie("অ্যানিম"); const sid2 = mm.scenes[0].id;
+  const r2 = S.addObject(mm, sid2, "teacher"); mm = r2.movie; const tid = r2.objId;
+  mm = S.updateScene(mm, sid2, (s) => S.updateObj(s, tid, (o) => S.setView(S.setAction(S.setAction(o, 0, "wave"), 3, "cook"), 2, "side")));
+  const o2 = mm.scenes[0].objects[0], a2 = ASSETS.find((a) => a.id === "teacher")!;
+  assert.equal(S.actionAt(o2, a2, 1), "wave");
+  assert.equal(S.actionAt(o2, a2, 3.5), "cook");
+  assert.equal(S.viewAt(o2, 1), "front");
+  assert.equal(S.viewAt(o2, 2.5), "side");
+  mm = S.updateScene(mm, sid2, (s) => S.addDialogue(s, tid, 4, "নমস্কার বন্ধুরা"));
+  mm = S.updateScene(mm, sid2, (s) => S.updateObj(s, tid, (o) => S.setAction(o, 3.9, "stand")));
+  const pl = S.placed(mm.scenes[0], 4.3).find((p) => p.obj.id === tid)!;
+  assert.equal(pl.act, "talk"); // দাঁড়িয়ে থেকে কথা বললে নিজে নিজে talk অঙ্গভঙ্গি
+  assert.ok(S.mouthOf(mm.scenes[0], tid, 4.3) !== null);
+  assert.equal(S.mouthOf(mm.scenes[0], tid, 1), null);
+  // পুরোনো প্রজেক্ট (views ছাড়া) এখনও কাজ করে
+  assert.equal(S.viewAt({ ...o2, views: undefined }, 5), "front");
+}
+
 console.log("✅ সব টেস্ট পাস (৫০টি অ্যাসেট সহ)");
