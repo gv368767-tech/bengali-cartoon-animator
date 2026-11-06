@@ -256,7 +256,7 @@ export function placed(s: Scene, t: number): Placed[] {
     if (asset.cat === "human" && act === "stand" && (s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur) || (s.clips ?? []).some((c) => c.kind === "voice" && c.objId === obj.id && t >= c.t && t <= c.t + c.dur))) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
     const air = act === "fly";
     const eff = st.s * (asset.layer === "back" || air ? 1 : depthScale(st.y, bg.horizon));
-    return { obj, asset, st, act, air, eff, flip: asset.side ? facingLeft(obj, t) : obj.flip };
+    return { obj, asset, st, act, air, eff, flip: asset.side || (asset.cat === "human" && viewAt(obj, t) === "side") ? facingLeft(obj, t) : obj.flip }; // পাশ-মুখী মানুষও চলার দিকে ঘোরে
   });
   const rank = (p: Placed) => (p.asset.layer === "back" ? 0 : p.air ? 2 : 1);
   return list.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || (rank(a.p) === 1 ? a.p.st.y - b.p.st.y : 0) || a.i - b.i).map((x) => x.p);

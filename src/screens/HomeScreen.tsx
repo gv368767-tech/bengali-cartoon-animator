@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Alert, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Meta, deleteMovie, listMovies, loadMovie } from "../lib/storage";
 import { Movie, newMovie } from "../lib/scene";
+import { buildStory } from "../lib/story";
+import { saveMovie as saveM } from "../lib/storage";
 import { TOTAL_ASSETS } from "../art/registry";
 import { C } from "../lib/theme";
 
@@ -11,6 +13,13 @@ export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: 
   const refresh = useCallback(() => { listMovies().then(setList).catch(() => setList([])); }, []);
   useEffect(refresh, [refresh]);
   const open = async (id: string) => { try { onOpen(await loadMovie(id)); } catch (e: any) { Alert.alert("খোলা যায়নি", String(e?.message ?? e)); } };
+  const [busy, setBusy] = useState(false);
+  const story = async () => {
+    setBusy(true);
+    try { const r = await buildStory(); await saveM(r.movie); refresh(); if (r.note) Alert.alert("ভয়েস নিয়ে জানুন", r.note + "\n\nভয়েস ছাড়াই গল্প তৈরি হয়েছে; এক্সপোর্টের সময় ফোনের ভয়েস বলবে।"); onOpen(r.movie); }
+    catch (e: any) { Alert.alert("গল্প তৈরি হয়নি", String(e?.message ?? e)); }
+    finally { setBusy(false); }
+  };
   const create = () => onOpen(newMovie(name.trim() || "আমার কার্টুন"));
   return (
     <View style={s.root}>
@@ -25,6 +34,7 @@ export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: 
       </View>
       <TouchableOpacity onPress={onLibrary} style={s.lib}><Text style={{ color: C.text, fontWeight: "700" }}>📚 অ্যাসেট লাইব্রেরি দেখুন ({TOTAL_ASSETS}টি)</Text></TouchableOpacity>
       <TouchableOpacity onPress={onDemo} style={[s.lib, { backgroundColor: "#1d3b37" }]}><Text style={{ color: C.text, fontWeight: "700" }}>🎭 অ্যানিমেশন ডেমো — ৩০টি অ্যানিমেশন চালিয়ে দেখুন</Text></TouchableOpacity>
+      <TouchableOpacity onPress={story} disabled={busy} style={[s.lib, { backgroundColor: "#3b2d1d" }]}><Text style={{ color: C.text, fontWeight: "700" }}>{busy ? "⏳ গল্প তৈরি হচ্ছে…" : "📖 গল্প: টুকাই ও মিনি — হারানো সাইকেল (৫ দৃশ্য)"}</Text></TouchableOpacity>
       <Text style={s.h2}>সেভ করা প্রজেক্ট</Text>
       <FlatList data={list} keyExtractor={(m) => m.id} ListEmptyComponent={<Text style={{ color: C.dim }}>এখনও কোনো প্রজেক্ট নেই।</Text>}
         renderItem={({ item }) => (
