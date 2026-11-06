@@ -27,6 +27,14 @@ jobs:
           FP=$(keytool -printcert -jarfile "$APK" | grep "SHA256:" | head -1 | sed 's/.*SHA256: *//')
           echo "cert: $FP"
           test "$FP" = "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
+      - name: Verify package name and versionCode match the installed app
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)
+          $AAPT dump badging "$APK" | grep "^package:"
+          $AAPT dump badging "$APK" | grep -q "package: name='com.bengalicartoon.animator'"
+          VC=$($AAPT dump badging "$APK" | sed -n "s/.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          test "$VC" -gt 1
       - uses: actions/upload-artifact@v4
         with:
           name: BengaliCartoonAnimator-apk

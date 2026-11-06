@@ -13,7 +13,7 @@
       "**/*"
     ],
     "android": {
-      "package": "com.bengalicartoon.studio",
+      "package": "com.bengalicartoon.animator",
       "versionCode": 10,
       "backgroundColor": "#15171c",
       "adaptiveIcon": {
