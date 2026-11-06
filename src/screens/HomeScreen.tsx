@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Meta, deleteMovie, listMovies, loadMovie } from "../lib/storage";
 import { Movie, newMovie } from "../lib/scene";
 import { TOTAL_ASSETS } from "../art/registry";
@@ -14,7 +14,10 @@ export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: 
   const create = () => onOpen(newMovie(name.trim() || "আমার কার্টুন"));
   return (
     <View style={s.root}>
-      <Text style={s.h1}>🎬 Bengali Cartoon Studio</Text>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <Image source={require("../../assets/logo.png")} style={{ width: 64, height: 64, marginRight: 12 }} />
+        <Text style={[s.h1, { flex: 1 }]}>Bengali Cartoon Studio</Text>
+      </View>
       <Text style={s.sub}>আঁকতে হবে না — তৈরি {TOTAL_ASSETS}টি কার্টুন দিয়ে ভিডিও বানান</Text>
       <View style={s.new}>
         <TextInput value={name} onChangeText={setName} placeholder="নতুন ভিডিওর নাম" placeholderTextColor={C.dim} style={s.input} />

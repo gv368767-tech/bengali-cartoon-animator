@@ -3,7 +3,8 @@ import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system";
 import StudioExport from "../../modules/studio-export";
 import { sceneItems } from "./render";
-import { Movie, dialogueAt, movieDuration } from "./scene";
+import { Movie, activeScenes, dialogueAt, fadeAlpha, sceneStarts } from "./scene";
+import { R } from "../art/shapes";
 import { BACKGROUNDS } from "../art/backgrounds";
 import { TRACKS } from "./audio";
 
@@ -15,32 +16,39 @@ const round = (_k: string, v: unknown) => (typeof v === "number" ? Math.round(v 
 export async function exportMovie(movie: Movie, q: Quality, onProgress: (p: number, msg: string) => void, isCancelled: () => boolean): Promise<{ path: string; warnings: string[] }> {
   if (!StudioExport) throw new Error("এক্সপোর্ট শুধু ইনস্টল করা APK-তে কাজ করে (Expo Go-তে নয়)");
   const w = q === 1080 ? 1920 : 1280, h = q === 1080 ? 1080 : 720;
-  const total = movieDuration(movie);
+  // শুধু বাছা দৃশ্য, ক্রম অনুযায়ী (Scene Merge)
+  const scenes = activeScenes(movie), plan = sceneStarts(movie);
+  const total = scenes.reduce((a, sc) => a + sc.duration, 0);
   const frames = Math.max(1, Math.round(total * FPS));
+  const strip = (u: string) => u.replace("file://", "");
 
   // সংলাপের পরম সময়
-  const voices: { text: string; startMs: number }[] = [];
-  let off = 0;
-  for (const s of movie.scenes) { for (const d of s.dialogues) voices.push({ text: d.text, startMs: Math.round((off + d.t) * 1000) }); off += s.duration; }
+  // সংলাপ (তৈরি ভয়েস ফাইল থাকলে সেটা) ও সাউন্ড ইফেক্ট/ভয়েসওভার ক্লিপ — সবই ভিডিওর পরম সময়ে
+  const voices: { text: string; startMs: number; file: string }[] = [];
+  const clips: { path: string; startMs: number; vol: number; durMs: number }[] = [];
+  for (const { scene: sc, start } of plan) {
+    for (const d of sc.dialogues) voices.push({ text: d.text, startMs: Math.round((start + d.t) * 1000), file: d.voiceUri ? strip(d.voiceUri) : "" });
+    for (const c of sc.clips ?? []) clips.push({ path: strip(c.uri), startMs: Math.round((start + c.t) * 1000), vol: c.vol, durMs: Math.round(Math.min(c.dur, sc.duration - c.t) * 1000) });
+  }
 
-  let music = "";
-  if (movie.music) {
+  let music = "", musicVol = 0.3;
+  if (movie.musicClip) { music = strip(movie.musicClip.uri); musicVol = movie.musicVol ?? 0.5; }
+  else if (movie.music) {
     const tr = TRACKS.find((t) => t.id === movie.music);
     if (tr) { const a = Asset.fromModule(tr.src); await a.downloadAsync(); music = (a.localUri ?? a.uri).replace("file://", ""); }
   }
   const out = ((FileSystem.cacheDirectory ?? "") + `studio_${Date.now()}.mp4`).replace("file://", "");
 
   onProgress(0.02, "অডিও তৈরি হচ্ছে (বাংলা ভয়েস ও মিউজিক)…");
-  const warn = await StudioExport.begin(JSON.stringify({ out, w, h, fps: FPS, totalMs: Math.round(total * 1000), bitrate: q === 1080 ? 8_000_000 : 4_000_000, music, musicVol: 0.3, voices }));
+  const warn = await StudioExport.begin(JSON.stringify({ out, w, h, fps: FPS, totalMs: Math.round(total * 1000), bitrate: q === 1080 ? 8_000_000 : 4_000_000, music, musicVol, voices, clips }));
   const warnings = warn.split(",").filter(Boolean);
 
   try {
-    for (const id of new Set(movie.scenes.map((s) => s.bg))) {
+    for (const id of new Set(scenes.map((s) => s.bg))) {
       const bg = BACKGROUNDS.find((b) => b.id === id)!;
       await StudioExport.setBackground(id, JSON.stringify(bg.shapes));
     }
-    const starts: number[] = []; let acc = 0;
-    for (const s of movie.scenes) { starts.push(acc); acc += s.duration; }
+    const starts = plan.map((p) => p.start);
 
     const BATCH = 6;
     for (let i = 0; i < frames; i += BATCH) {
@@ -48,11 +56,14 @@ export async function exportMovie(movie: Movie, q: Quality, onProgress: (p: numb
       const batch: unknown[] = [];
       for (let k = i; k < Math.min(frames, i + BATCH); k++) {
         const time = k / FPS;
-        let si = movie.scenes.length - 1;
+        let si = scenes.length - 1;
         for (let j = 0; j < starts.length; j++) if (time >= starts[j] && (j === starts.length - 1 || time < starts[j + 1])) { si = j; break; }
-        const sc = movie.scenes[si], lt = Math.min(time - starts[si], sc.duration);
+        const sc = scenes[si], lt = Math.min(time - starts[si], sc.duration);
         const d = dialogueAt(sc, lt);
-        batch.push({ bg: sc.bg, caption: d ? d.text : "", items: sceneItems(movie, sc, lt).map((it) => ({ x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, shadow: it.shadow, shapes: it.shapes })) });
+        const items = sceneItems(movie, sc, lt).map((it) => ({ x: it.x, y: it.y, sx: it.sx, sy: it.sy, rot: it.rot, shadow: it.shadow, shapes: it.shapes }));
+        const fa = fadeAlpha(movie, si, lt); // দৃশ্য-জোড়ায় ফেড: কালো পর্দা
+        if (fa > 0.01) items.push({ x: 0, y: 0, sx: 1, sy: 1, rot: 0, shadow: false, shapes: [R(0, 0, 1280, 720, "#000000", 0, fa)] });
+        batch.push({ bg: sc.bg, caption: d ? d.text : "", items });
       }
       await StudioExport.drawFrames(JSON.stringify(batch, round));
       onProgress(0.05 + 0.9 * Math.min(1, (i + BATCH) / frames), `ফ্রেম ${Math.min(frames, i + BATCH)}/${frames}`);

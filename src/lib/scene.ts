@@ -1,6 +1,7 @@
 // খাঁটি (pure) দৃশ্য-মডেল — UI ছাড়া, তাই আলাদা টেস্ট করা যায়।
 import { Action, Mouth, View } from "../art/shapes";
 import { mouthAt } from "./lipsync";
+import { levelAt, mouthFromLevel } from "./envelope";
 import { AssetDef, getAsset, getBg } from "../art/registry";
 import { HumanDef } from "../art/human";
 
@@ -11,10 +12,16 @@ export type Look = Partial<Pick<HumanDef, "skin" | "hair" | "top" | "bottom">>;
 export type CastMember = { id: string; assetId: string; name: string; look?: Look };
 export type ViewKey = { t: number; view: View };
 export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[]; views?: ViewKey[] };
-export type Dialogue = { id: string; objId: string; t: number; dur: number; text: string };
-export type Scene = { id: string; bg: string; duration: number; objects: Obj[]; dialogues: Dialogue[] };
+// voiceUri: লেখা থেকে তৈরি (বা নিজের) ভয়েস ফাইল; থাকলে সেটাই বাজে, না থাকলে ফোনের ভয়েস বলে
+export type Dialogue = { id: string; objId: string; t: number; dur: number; text: string; voiceUri?: string };
+// অডিও ক্লিপ: sfx = সাউন্ড ইফেক্ট, voice = ভয়েসওভার (objId দিলে ওই চরিত্রের ঠোঁট আওয়াজ অনুযায়ী নড়ে)
+export type AudioKind = "sfx" | "voice";
+export type AudioClip = { id: string; kind: AudioKind; name: string; uri: string; t: number; dur: number; vol: number; objId?: string };
+// skip: জোড়ার সময় বাদ; fade: দৃশ্যের শেষে ফেড-আউট/পরেরটায় ফেড-ইন
+export type Scene = { id: string; bg: string; duration: number; objects: Obj[]; dialogues: Dialogue[]; skip?: boolean; fade?: boolean; clips?: AudioClip[] };
 export type Movie = {
   version: 1; kind: "movie"; id: string; name: string; speed: number; music: string | null;
+  musicClip?: { uri: string; name: string }; musicVol?: number; // নিজের ফোনের মিউজিক (থাকলে বিল্ট-ইনের বদলে)
   cast: CastMember[]; scenes: Scene[]; updatedAt: number;
 };
 
@@ -44,7 +51,8 @@ export function duplicateScene(m: Movie, idx: number): Movie {
   const idMap = new Map<string, string>();
   const objects = src.objects.map((o) => { const id = uid(); idMap.set(o.id, id); return { ...o, id }; });
   const dialogues = src.dialogues.map((d) => ({ ...d, id: uid(), objId: idMap.get(d.objId) ?? d.objId }));
-  return touch({ ...m, scenes: [...m.scenes.slice(0, idx + 1), { ...src, id: uid(), objects, dialogues }, ...m.scenes.slice(idx + 1)] });
+  const clips = src.clips?.map((c) => ({ ...c, id: uid(), objId: c.objId ? idMap.get(c.objId) ?? c.objId : undefined }));
+  return touch({ ...m, scenes: [...m.scenes.slice(0, idx + 1), { ...src, id: uid(), objects, dialogues, clips }, ...m.scenes.slice(idx + 1)] });
 }
 export function deleteScene(m: Movie, idx: number): Movie {
   if (m.scenes.length <= 1) return m;
@@ -53,6 +61,54 @@ export function deleteScene(m: Movie, idx: number): Movie {
 export const setBg = (m: Movie, sceneId: string, bg: string) => updateScene(m, sceneId, (s) => ({ ...s, bg }));
 export const setDuration = (m: Movie, sceneId: string, d: number) => updateScene(m, sceneId, (s) => ({ ...s, duration: clamp(Math.round(d), 2, 60) }));
 export const movieDuration = (m: Movie) => m.scenes.reduce((a, s) => a + s.duration, 0);
+
+// ---------- দৃশ্য জোড়া (Scene Merge) ----------
+/** চূড়ান্ত ভিডিওতে যে দৃশ্যগুলো যাবে, ক্রম অনুযায়ী (সব বাদ দিলে সবগুলো) */
+export function activeScenes(m: Movie): Scene[] {
+  const a = m.scenes.filter((s) => !s.skip);
+  return a.length ? a : m.scenes;
+}
+export const activeDuration = (m: Movie) => activeScenes(m).reduce((a, s) => a + s.duration, 0);
+export function moveScene(m: Movie, idx: number, dir: -1 | 1): Movie {
+  const j = idx + dir;
+  if (j < 0 || j >= m.scenes.length) return m;
+  const sc = m.scenes.slice();
+  [sc[idx], sc[j]] = [sc[j], sc[idx]];
+  return touch({ ...m, scenes: sc });
+}
+export const setSceneFlags = (m: Movie, sceneId: string, f: { skip?: boolean; fade?: boolean }) => updateScene(m, sceneId, (s) => ({ ...s, ...f }));
+/** ভিডিওর শুরু থেকে প্রতিটি (সক্রিয়) দৃশ্যের শুরুর সময় */
+export function sceneStarts(m: Movie): { scene: Scene; start: number }[] {
+  let acc = 0;
+  return activeScenes(m).map((scene) => { const r = { scene, start: acc }; acc += scene.duration; return r; });
+}
+/** ফেডের কালো পর্দার স্বচ্ছতা (০..১) — দৃশ্যের শুরু/শেষ ০.৪ সেকেন্ডে */
+export function fadeAlpha(m: Movie, sceneIdx: number, localT: number): number {
+  const list = activeScenes(m), sc = list[sceneIdx];
+  if (!sc) return 0;
+  const F = 0.4;
+  let a = 0;
+  if (sc.fade && localT > sc.duration - F) a = Math.max(a, (localT - (sc.duration - F)) / F); // শেষে ফেড-আউট
+  if (sceneIdx > 0 && list[sceneIdx - 1].fade && localT < F) a = Math.max(a, 1 - localT / F); // আগের দৃশ্য ফেড হলে এখানে ফেড-ইন
+  return Math.max(0, Math.min(1, a));
+}
+
+// ---------- অডিও ক্লিপ ----------
+export function addClip(s: Scene, c: Omit<AudioClip, "id">): Scene {
+  const clip: AudioClip = { ...c, id: uid(), t: Math.round(c.t * 100) / 100 };
+  return { ...s, duration: Math.max(s.duration, Math.min(60, Math.ceil(clip.t + Math.min(clip.dur, 6)))), clips: [...(s.clips ?? []), clip] };
+}
+export const updateClip = (s: Scene, id: string, patch: Partial<AudioClip>): Scene => ({ ...s, clips: (s.clips ?? []).map((c) => (c.id === id ? { ...c, ...patch, t: Math.max(0, Math.round((patch.t ?? c.t) * 100) / 100) } : c)) });
+export const removeClip = (s: Scene, id: string): Scene => ({ ...s, clips: (s.clips ?? []).filter((c) => c.id !== id) });
+
+// ---------- টাইমলাইন এডিটরের সময়-বদল ----------
+const rt = (t: number) => Math.max(0, Math.round(t * 100) / 100);
+export const retimeAct = (o: Obj, i: number, t: number): Obj => ({ ...o, acts: o.acts.map((a, k) => (k === i ? { ...a, t: rt(t) } : a)).sort((a, b) => a.t - b.t) });
+export const removeActAt = (o: Obj, i: number): Obj => ({ ...o, acts: o.acts.filter((_, k) => k !== i) });
+export const retimeView = (o: Obj, i: number, t: number): Obj => ({ ...o, views: (o.views ?? []).map((a, k) => (k === i ? { ...a, t: rt(t) } : a)).sort((a, b) => a.t - b.t) });
+export const removeViewAt = (o: Obj, i: number): Obj => ({ ...o, views: (o.views ?? []).filter((_, k) => k !== i) });
+export const retimeKey = (o: Obj, i: number, t: number): Obj => ({ ...o, keys: o.keys.map((a, k) => (k === i ? { ...a, t: rt(t) } : a)).sort((a, b) => a.t - b.t) });
+export const removeKeyAtIndex = (o: Obj, i: number): Obj => (o.keys.length <= 1 ? o : { ...o, keys: o.keys.filter((_, k) => k !== i) });
 
 // ---------- অবজেক্ট ----------
 export function addObject(m: Movie, sceneId: string, assetId: string, castId?: string): { movie: Movie; objId: string } {
@@ -133,7 +189,10 @@ export function actionAt(o: Obj, a: AssetDef, t: number): Exclude<Action, "auto"
   if (v > 8 && a.actions.includes("walk")) return "walk";
   return a.defaultAction;
 }
-const RATE: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2, talk: 4, clap: 6, salute: 2, point: 4, thumbsup: 4, namaste: 3, bow: 2.2, shrug: 3, cheer: 7, angry: 5, laugh: 6, cry: 4, scared: 6, think: 2.5, cook: 4, teach: 3, carry: 7, read: 2, write: 4, eat: 4, drink: 3, phone: 4, sleep: 2.5 };
+const RATE0: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2, talk: 4, clap: 6, salute: 2, point: 4, thumbsup: 4, namaste: 3, bow: 2.2, shrug: 3, cheer: 7, angry: 5, laugh: 6, cry: 4, scared: 6, think: 2.5, cook: 4, teach: 3, carry: 7, read: 2, write: 4, eat: 4, drink: 3, phone: 4, sleep: 2.5 };
+// অ্যানিমেশন আগের চেয়ে ~৩০% দ্রুত ও স্বাভাবিক (হাত-পা-মাথার দোলা)
+export const SPEEDUP = 1.3;
+const RATE: Record<string, number> = Object.fromEntries(Object.entries(RATE0).map(([k, v]) => [k, Math.round(v * SPEEDUP * 100) / 100]));
 export const rateOf = (act: string) => RATE[act] ?? 2;
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000; return h / 160; };
 export function phaseAt(o: Obj, a: AssetDef, act: string, t: number, speed: number): number {
@@ -146,7 +205,18 @@ export function talkAt(s: Scene, objId: string, t: number): number {
   return 0;
 }
 export function mouthOf(s: Scene, objId: string, t: number): Mouth | null {
-  for (const d of s.dialogues) if (d.objId === objId && t >= d.t && t <= d.t + d.dur) return mouthAt(d.text, t - d.t, d.dur);
+  for (const d of s.dialogues) {
+    if (d.objId !== objId || t < d.t || t > d.t + d.dur) continue;
+    const m = mouthAt(d.text, t - d.t, d.dur);
+    const lv = d.voiceUri ? levelAt(d.voiceUri, t - d.t) : null;
+    if (m && lv != null) return lv < 0.05 ? { shape: "M", open: 0 } : { shape: m.shape === "M" ? "E" : m.shape, open: Math.min(1, 0.25 + lv * 1.3) }; // আকৃতি লেখা থেকে, খোলার মাত্রা আসল আওয়াজ থেকে
+    return m;
+  }
+  for (const c of s.clips ?? []) { // নিজের ভয়েসওভার ফাইল: আওয়াজ দেখে ঠোঁট নড়ে
+    if (c.kind !== "voice" || c.objId !== objId || t < c.t || t > c.t + c.dur) continue;
+    const lv = levelAt(c.uri, t - c.t);
+    if (lv != null) return mouthFromLevel(lv, t - c.t);
+  }
   return null;
 }
 export function viewAt(o: Obj, t: number): View {
@@ -165,9 +235,12 @@ export const depthScale = (y: number, horizon: number) => 0.5 + 0.5 * clamp((y -
 
 // ---------- সংলাপ ----------
 export const dialogueLength = (text: string) => Math.max(1.5, Math.round(text.trim().length * 0.09 * 10) / 10);
-export function addDialogue(s: Scene, objId: string, t: number, text: string): Scene {
+export function addDialogue(s: Scene, objId: string, t: number, text: string, id: string = uid()): Scene {
   const dur = dialogueLength(text);
-  return { ...s, duration: Math.max(s.duration, Math.min(60, Math.ceil(t + dur + 0.3))), dialogues: [...s.dialogues, { id: uid(), objId, t: Math.round(t * 100) / 100, dur, text: text.trim() }].sort((a, b) => a.t - b.t) };
+  return { ...s, duration: Math.max(s.duration, Math.min(60, Math.ceil(t + dur + 0.3))), dialogues: [...s.dialogues, { id, objId, t: Math.round(t * 100) / 100, dur, text: text.trim() }].sort((a, b) => a.t - b.t) };
+}
+export function updateDialogue(s: Scene, id: string, patch: Partial<Dialogue>): Scene {
+  return { ...s, dialogues: s.dialogues.map((d) => (d.id === id ? { ...d, ...patch, t: rt(patch.t ?? d.t), dur: Math.max(0.5, patch.dur ?? d.dur) } : d)).sort((a, b) => a.t - b.t) };
 }
 export const removeDialogue = (s: Scene, id: string): Scene => ({ ...s, dialogues: s.dialogues.filter((d) => d.id !== id) });
 export const dialogueAt = (s: Scene, t: number) => s.dialogues.find((d) => t >= d.t && t <= d.t + d.dur) ?? null;
@@ -180,7 +253,7 @@ export function placed(s: Scene, t: number): Placed[] {
     const asset = getAsset(obj.assetId)!;
     const st = evalObj(obj, t);
     let act = actionAt(obj, asset, t);
-    if (asset.cat === "human" && act === "stand" && s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur)) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
+    if (asset.cat === "human" && act === "stand" && (s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur) || (s.clips ?? []).some((c) => c.kind === "voice" && c.objId === obj.id && t >= c.t && t <= c.t + c.dur))) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
     const air = act === "fly";
     const eff = st.s * (asset.layer === "back" || air ? 1 : depthScale(st.y, bg.horizon));
     return { obj, asset, st, act, air, eff, flip: asset.side ? facingLeft(obj, t) : obj.flip };

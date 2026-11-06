@@ -150,4 +150,60 @@ assert.equal(mouthAt("আমি", 5, 2), null);
   assert.equal(S.viewAt({ ...o2, views: undefined }, 5), "front");
 }
 
+// ===== v2.1: দৃশ্য জোড়া, অডিও, টাইমলাইন, ঠোঁট =====
+{
+  const { setEnvelope } = require("../src/lib/envelope");
+  let m = S.newMovie("জোড়া");
+  m = S.addScene(m, 0); m = S.addScene(m, 1); m = S.addScene(m, 2);
+  assert.equal(m.scenes.length, 4);
+  const total = S.activeDuration(m);
+  assert.equal(total, m.scenes.reduce((a, x) => a + x.duration, 0));
+  // বাদ দেওয়া
+  m = S.setSceneFlags(m, m.scenes[1].id, { skip: true });
+  assert.equal(S.activeScenes(m).length, 3);
+  assert.equal(S.sceneStarts(m)[1].start, m.scenes[0].duration);
+  // সব বাদ দিলে সবগুলো
+  let all = m; for (const x of m.scenes) all = S.setSceneFlags(all, x.id, { skip: true });
+  assert.equal(S.activeScenes(all).length, 4);
+  // ক্রম বদল
+  const id0 = m.scenes[0].id; m = S.moveScene(m, 0, 1);
+  assert.equal(m.scenes[1].id, id0);
+  assert.equal(S.moveScene(m, 0, -1).scenes[0].id, m.scenes[0].id);
+  // ফেড
+  const first = S.activeScenes(m)[0];
+  m = S.setSceneFlags(m, first.id, { fade: true });
+  const d0 = first.duration;
+  assert.equal(S.fadeAlpha(m, 0, 0), 0);
+  assert.ok(S.fadeAlpha(m, 0, d0 - 0.1) > 0.5);
+  assert.ok(S.fadeAlpha(m, 1, 0) > 0.9 || S.activeScenes(m).length < 2);
+  // অডিও ক্লিপ
+  let sc = m.scenes[0];
+  sc = S.addClip(sc, { kind: "sfx", name: "x", uri: "file:///a.mp3", t: 1, dur: 2, vol: 1 });
+  assert.equal((sc.clips ?? []).length, 1);
+  const cid = sc.clips![0].id;
+  sc = S.updateClip(sc, cid, { t: 2.5, vol: 0.4 });
+  assert.equal(sc.clips![0].t, 2.5); assert.equal(sc.clips![0].vol, 0.4);
+  sc = S.removeClip(sc, cid); assert.equal(sc.clips!.length, 0);
+  // টাইমলাইন retime
+  const mv = S.newMovie("t"); const rr = S.addObject(mv, mv.scenes[0].id, "boy"); let o: any = rr.movie.scenes[0].objects[0];
+  o = S.setAction(o, 1, "walk"); o = S.setAction(o, 3, "wave");
+  o = S.retimeAct(o, 0, 4); assert.deepEqual(o.acts.map((a: any) => a.t), [3, 4]);
+  o = S.removeActAt(o, 0); assert.equal(o.acts.length, 1);
+  // ঠোঁট: সংলাপ + আওয়াজ
+  let sc2 = S.newMovie("l").scenes[0]; sc2 = S.addDialogue(sc2, "o1", 0, "নমস্কার বন্ধুরা");
+  const d = sc2.dialogues[0];
+  assert.ok(S.mouthOf(sc2, "o1", 0.3));
+  sc2 = S.updateDialogue(sc2, d.id, { voiceUri: "file:///v.wav" });
+  setEnvelope("file:///v.wav", Array.from({ length: 80 }, (_, i) => (i % 4 < 2 ? 0.9 : 0)));
+  const a1 = S.mouthOf(sc2, "o1", 0.0), a2 = S.mouthOf(sc2, "o1", 0.15);
+  assert.ok(a1 && a2 && a1.open !== a2.open, "আওয়াজ অনুযায়ী মুখ খোলা-বন্ধ হয়");
+  assert.equal(S.mouthOf(sc2, "o1", 99), null);
+  // পুরোনো প্রজেক্ট (নতুন ফিল্ড ছাড়া) চলে
+  const old = JSON.parse(JSON.stringify(S.newMovie("পুরোনো")));
+  delete old.scenes[0].clips; delete old.scenes[0].skip; delete old.musicClip;
+  assert.equal(S.activeScenes(old).length, 1);
+  assert.ok(S.fadeAlpha(old, 0, 1) === 0);
+  S.duplicateScene(old, 0);
+}
+
 console.log("✅ সব টেস্ট পাস (৫০টি অ্যাসেট সহ)");

@@ -2,22 +2,25 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Alert, LayoutChangeEvent, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from "react-native";
 import * as Sharing from "expo-sharing";
 import { StageView } from "../components/StageView";
-import { DialogueSheet, ExportSheet, LibraryPanel, LookSheet, MusicSheet } from "../components/Panels";
+import { AudioSheet, DialogueSheet, ExportSheet, LibraryPanel, LookSheet, MergeSheet, MusicSheet, VoiceOpt } from "../components/Panels";
+import TimelineEditor from "../components/TimelineEditor";
 import AnimationPanel from "../components/AnimationPanel";
 import { getAsset } from "../art/registry";
 import {
   Movie, STAGE_H, STAGE_W, addDialogue, addObject, addScene, deleteScene, dialogueAt, duplicateScene, emptyHistory, evalObj, fmtTime,
   hitTest, History, pushHistory, redo, removeDialogue, removeKeyAt, removeObject, renameCast, setAction, setBg, setDuration, setKey, setLook,
   undo, updateObj, updateScene, Look, dialogueLength, setView, viewAt, actionAt,
+  activeDuration, addClip, moveScene, removeClip, setSceneFlags, updateClip, updateDialogue,
 } from "../lib/scene";
 import { saveMovie } from "../lib/storage";
-import { pauseMusic, playMusic, speak, stopMusic, stopSpeech } from "../lib/audio";
+import { pauseMusic, playClip, playMusic, speak, stopClips, stopMusic, stopSpeech } from "../lib/audio";
+import { ensureEnvelopes, makeVoice, pickAudio } from "../lib/audioFiles";
 import { exportAvailable, exportMovie, Quality, saveToGallery } from "../lib/exporter";
 import { ACTION_BN, C } from "../lib/theme";
 import type { Action, View as ViewT } from "../art/shapes";
 import { animName } from "../art/anim";
 
-type Sheet = null | "dialogue" | "look" | "music" | "export" | "anim";
+type Sheet = null | "dialogue" | "look" | "music" | "export" | "anim" | "audio" | "merge" | "timeline";
 
 export default function EditorScreen({ initial, onBack }: { initial: Movie; onBack: () => void }) {
   const { width: winW } = useWindowDimensions();
@@ -52,16 +55,19 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
 
   // ---- প্লেব্যাক ----
   const spoken = useRef<Set<string>>(new Set());
-  const stopAll = useCallback(() => { setPlaying(false); stopSpeech(); pauseMusic(); }, []);
+  const stopAll = useCallback(() => { setPlaying(false); stopSpeech(); stopClips(); pauseMusic(); }, []);
+  const played = useRef<Set<string>>(new Set());
+  useEffect(() => { ensureEnvelopes(initial).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!playing) return;
     let raf = 0, last = Date.now();
-    if (R.current.movie.music) playMusic(R.current.movie.music).catch(() => {});
+    { const mv0 = R.current.movie; const mu = mv0.musicClip?.uri ?? mv0.music; if (mu) playMusic(mu, mv0.musicVol ?? (mv0.musicClip ? 0.5 : 0.35)).catch(() => {}); }
     const tick = () => {
       const now = Date.now(), dt = (now - last) / 1000; last = now;
       const { scene: sc, t: cur, si: idx, movie: mv } = R.current;
       let nt = cur + dt;
-      for (const d of sc.dialogues) if (nt >= d.t && cur < d.t + 0.001 && !spoken.current.has(d.id)) { spoken.current.add(d.id); speak(d.text); }
+      for (const d of sc.dialogues) if (nt >= d.t && cur < d.t + 0.001 && !spoken.current.has(d.id)) { spoken.current.add(d.id); if (d.voiceUri) playClip(d.voiceUri, 1); else speak(d.text); }
+      for (const c of sc.clips ?? []) if (nt >= c.t && cur < c.t + 0.001 && !spoken.current.has(c.id)) { spoken.current.add(c.id); playClip(c.uri, c.vol); }
       if (nt >= sc.duration) {
         if (idx < mv.scenes.length - 1) { setSi(idx + 1); nt = 0; spoken.current.clear(); }
         else { setT(sc.duration); stopAll(); return; }
@@ -72,7 +78,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [playing, stopAll]);
-  useEffect(() => () => { stopSpeech(); stopMusic(); }, []);
+  useEffect(() => () => { stopSpeech(); stopClips(); stopMusic(); }, []);
 
   const togglePlay = () => {
     if (playing) return stopAll();
@@ -146,11 +152,13 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
 
   const add = (assetId: string, castId?: string) => {
     stopAll();
-    const r = addObject(R.current.movie, scene.id, assetId, castId);
+    const r = addObject(R.current.movie, R.current.scene.id, assetId, castId);
     setHist((h) => pushHistory(h, R.current.movie));
     setMovie({ ...r.movie, updatedAt: Date.now() }); setSel(r.objId);
   };
 
+  const addCb = useCallback((a: string, c?: string) => add(a, c), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const bgCb = useCallback((id: string) => commit((m) => setBg(m, R.current.scene.id, id)), [commit]);
   const doUndo = () => { const r = undo(hist, movie); if (r) { setHist(r.h); setMovie(r.v); setSel(null); if (si >= r.v.scenes.length) setSi(r.v.scenes.length - 1); } };
   const doRedo = () => { const r = redo(hist, movie); if (r) { setHist(r.h); setMovie(r.v); setSel(null); } };
 
@@ -170,6 +178,34 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
   const doSave = async () => { try { const n = await saveToGallery(exp.result!); Alert.alert("সেভ হয়েছে", "গ্যালারি/ভিডিও অ্যাপে দেখুন: " + n); } catch (e: any) { Alert.alert("ত্রুটি", String(e?.message ?? e)); } };
   const doShare = async () => { try { if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(exp.result!, { mimeType: "video/mp4" }); else Alert.alert("শেয়ার সম্ভব নয়"); } catch (e: any) { Alert.alert("ত্রুটি", String(e?.message ?? e)); } };
 
+  // ---- সংলাপ ভয়েস / অডিও ----
+  const [busy, setBusy] = useState("");
+  const withBusy = async (msg: string, fn: () => Promise<void>) => {
+    setBusy(msg);
+    try { await fn(); } catch (e: any) { Alert.alert("ত্রুটি", String(e?.message ?? e)); } finally { setBusy(""); }
+  };
+  const objChoices = () => scene.objects.filter((o) => getAsset(o.assetId)?.talk).map((o) => { const cm = o.castId ? R.current.movie.cast.find((c) => c.id === o.castId) : null; return { id: o.id, name: cm?.name ?? getAsset(o.assetId)?.name ?? "" }; });
+  const genVoice = (sceneId: string, dId: string, text: string, v: VoiceOpt) => withBusy("ভয়েস বানানো হচ্ছে…", async () => {
+    const r = await makeVoice(text, v.rate, v.pitch);
+    commit((m) => updateScene(m, sceneId, (sc) => updateDialogue(sc, dId, { voiceUri: r.uri, dur: r.dur })));
+  });
+  const addDlg = (text: string, gen: boolean, v: VoiceOpt) => {
+    if (!selObj || !text.trim()) return;
+    const id = Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4);
+    const sid = scene.id, oid = selObj.id, tt = t, tx = text.trim();
+    commit((m) => updateScene(m, sid, (sc) => addDialogue(sc, oid, tt, tx, id)));
+    if (gen) genVoice(sid, id, tx, v); else speak(tx);
+  };
+  const addAudioClip = (kind: "sfx" | "voice") => withBusy("অডিও ফাইল পড়া হচ্ছে…", async () => {
+    const a = await pickAudio(); if (!a) return;
+    const sid = scene.id, tt = t, objId = kind === "voice" ? selObj?.id : undefined;
+    commit((m) => updateScene(m, sid, (sc) => addClip(sc, { kind, name: a.name, uri: a.uri, t: tt, dur: a.dur, vol: 1, objId })));
+  });
+  const pickMusic = () => withBusy("মিউজিক ফাইল পড়া হচ্ছে…", async () => {
+    const a = await pickAudio(); if (!a) return;
+    commit((m) => ({ ...m, musicClip: { id: "music", kind: "music", name: a.name, uri: a.uri, t: 0, dur: a.dur, vol: 0.5 }, musicVol: m.musicVol ?? 0.5 }));
+  });
+
   const dlg = dialogueAt(scene, t);
   const dlgName = dlg ? (() => { const o = scene.objects.find((x) => x.id === dlg.objId); const cm = o?.castId ? movie.cast.find((c) => c.id === o.castId) : null; return cm?.name ?? ""; })() : "";
   const actions: Action[] = selAsset ? (["auto", ...selAsset.actions] as Action[]) : [];
@@ -182,6 +218,8 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
         <Text style={s.topTitle} numberOfLines={1}>{movie.name}</Text>
         <TouchableOpacity onPress={doUndo} disabled={!hist.past.length}><Text style={[s.ic, !hist.past.length && s.dis]}>↶</Text></TouchableOpacity>
         <TouchableOpacity onPress={doRedo} disabled={!hist.future.length}><Text style={[s.ic, !hist.future.length && s.dis]}>↷</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => { stopAll(); setSheet("timeline"); }}><Text style={s.ic}>⏱</Text></TouchableOpacity>
+        <TouchableOpacity onPress={() => { stopAll(); setSheet("audio"); }}><Text style={s.ic}>🔊</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => setSheet("music")}><Text style={s.ic}>🎵</Text></TouchableOpacity>
         <TouchableOpacity onPress={() => { stopAll(); setSheet("export"); }}><Text style={[s.topBtn, { color: C.accent }]}>MP4 ⬇</Text></TouchableOpacity>
       </View>
@@ -245,16 +283,18 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
 
         {/* দৃশ্য-স্ট্রিপ */}
         <View style={[s.card, { width: stageW }]}>
-          <Text style={s.cardTitle}>দৃশ্য ({movie.scenes.length}টি)</Text>
+          <Text style={s.cardTitle}>দৃশ্য ({movie.scenes.length}টি) <Text style={s.dimTxt}>· ভিডিও {fmtTime(activeDuration(movie))}</Text></Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {movie.scenes.map((sc, i) => (
               <TouchableOpacity key={sc.id} onPress={() => { stopAll(); setSi(i); setT(0); setSel(null); }} style={[s.scene, i === si && s.sceneOn]}>
-                <Text style={{ color: C.text, fontWeight: "700" }}>দৃশ্য {i + 1}</Text><Text style={s.dimTxt}>{sc.duration}s · {sc.objects.length} বস্তু</Text></TouchableOpacity>))}
+                <Text style={{ color: C.text, fontWeight: "700" }}>দৃশ্য {i + 1}</Text><Text style={s.dimTxt}>{sc.duration}s · {sc.objects.length} বস্তু</Text>{sc.skip && <Text style={{ color: C.danger, fontSize: 11 }}>বাদ</Text>}</TouchableOpacity>))}
           </ScrollView>
           <View style={[s.wrap, { marginTop: 8 }]}>
             <Btn label="＋ নতুন দৃশ্য" onPress={() => { stopAll(); commit((m) => addScene(m, si, scene.bg)); setSi(si + 1); setT(0); setSel(null); }} />
             <Btn label="⧉ নকল" onPress={() => { stopAll(); commit((m) => duplicateScene(m, si)); setSi(si + 1); setT(0); setSel(null); }} />
             <Btn label="🗑 দৃশ্য মুছুন" danger onPress={() => { if (movie.scenes.length < 2) return Alert.alert("অন্তত একটি দৃশ্য থাকতে হবে"); stopAll(); commit((m) => deleteScene(m, si)); setSi(Math.max(0, si - 1)); setT(0); setSel(null); }} />
+            <Btn label="🎞 দৃশ্য জোড়া" onPress={() => { stopAll(); setSheet("merge"); }} />
+            <Btn label="⏱ টাইমলাইন" onPress={() => { stopAll(); setSheet("timeline"); }} />
             <Btn label="⏱ −" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration - 1))} />
             <Btn label="⏱ ＋" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration + 1))} />
           </View>
@@ -263,7 +303,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
         {/* লাইব্রেরি */}
         <View style={[{ width: stageW }]}>
           <TouchableOpacity onPress={() => setLib(!lib)}><Text style={[s.link, { padding: 8 }]}>{lib ? "▼" : "▶"} লাইব্রেরি (ব্যাকগ্রাউন্ড, মানুষ, প্রাণী, পাখি…)</Text></TouchableOpacity>
-          {lib && <LibraryPanel movie={movie} scene={scene} onAdd={add} onBg={(id) => commit((m) => setBg(m, scene.id, id))} />}
+          {lib && <LibraryPanel movie={movie} scene={scene} onAdd={addCb} onBg={bgCb} />}
         </View>
       </ScrollView>
 
@@ -279,14 +319,35 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
         />
       )}
       {sheet === "dialogue" && selObj && (
-        <DialogueSheet movie={movie} scene={scene} objId={selObj.id} t={t} onClose={() => setSheet(null)}
-          onAdd={(text) => { commit((m) => updateScene(m, scene.id, (sc) => addDialogue(sc, selObj.id, t, text))); speak(text); }}
-          onRemove={(id) => commit((m) => updateScene(m, scene.id, (sc) => removeDialogue(sc, id)))} />
+        <DialogueSheet movie={movie} scene={scene} objId={selObj.id} t={t} busy={busy} onClose={() => setSheet(null)}
+          onAdd={addDlg}
+          onRemove={(id) => commit((m) => updateScene(m, scene.id, (sc) => removeDialogue(sc, id)))}
+          onUpdate={(id, patch) => commit((m) => updateScene(m, scene.id, (sc) => updateDialogue(sc, id, patch)))}
+          onVoice={(id, v) => { const d = scene.dialogues.find((x) => x.id === id); if (d) genVoice(scene.id, id, d.text, v); }}
+          onPlay={(id) => { const d = scene.dialogues.find((x) => x.id === id); if (!d) return; stopClips(); if (d.voiceUri) playClip(d.voiceUri, 1); else speak(d.text); }} />
       )}
       {sheet === "look" && selCast && (
         <LookSheet cast={selCast} onClose={() => setSheet(null)} onLook={(l: Look) => commit((m) => setLook(m, selCast.id, l))} onRename={(n) => commit((m) => renameCast(m, selCast.id, n))} />
       )}
       {sheet === "music" && <MusicSheet current={movie.music} onClose={() => setSheet(null)} onPick={(id) => { commit((m) => ({ ...m, music: id })); if (!id) stopMusic(); else playMusic(id).catch(() => {}); }} />}
+      {sheet === "audio" && (
+        <AudioSheet movie={movie} scene={scene} t={t} objs={objChoices()} busy={busy} onClose={() => setSheet(null)}
+          onMusic={(id) => { commit((m) => ({ ...m, music: id, musicClip: undefined })); if (!id) stopMusic(); else playMusic(id, R.current.movie.musicVol ?? 0.35).catch(() => {}); }}
+          onMusicFile={pickMusic}
+          onMusicVol={(v) => commit((m) => ({ ...m, musicVol: Math.round(v * 100) / 100 }), false)}
+          onAddClip={addAudioClip}
+          onUpdateClip={(id, patch) => commit((m) => updateScene(m, scene.id, (sc) => updateClip(sc, id, patch)))}
+          onRemoveClip={(id) => commit((m) => updateScene(m, scene.id, (sc) => removeClip(sc, id)))} />
+      )}
+      {sheet === "merge" && (
+        <MergeSheet movie={movie} onClose={() => setSheet(null)}
+          onToggle={(id, skip) => commit((m) => setSceneFlags(m, id, { skip }))}
+          onFade={(id, fade) => commit((m) => setSceneFlags(m, id, { fade }))}
+          onMove={(i, d) => commit((m) => moveScene(m, i, d))}
+          onAll={() => commit((m) => ({ ...m, scenes: m.scenes.map((x) => ({ ...x, skip: false })) }))}
+          onExport={() => setSheet("export")} />
+      )}
+      {sheet === "timeline" && <TimelineEditor movie={movie} si={si} selId={sel} commit={(fn) => commit(fn)} onScene={(i) => { stopAll(); setSi(i); setT(0); }} onClose={() => setSheet(null)} />}
       {sheet === "export" && (
         <ExportSheet available={exportAvailable()} busy={exp.busy} progress={exp.p} msg={exp.msg} result={exp.result} error={exp.error} warnings={exp.warnings}
           onStart={startExport} onCancel={() => { cancelRef.current = true; }} onSave={doSave} onShare={doShare} onClose={() => { setSheet(null); setExp((e) => ({ ...e, result: null, error: "" })); }} />

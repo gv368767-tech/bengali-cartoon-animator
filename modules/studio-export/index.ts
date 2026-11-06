@@ -7,6 +7,8 @@ export type StudioExportNative = {
   finish(): Promise<string>;
   cancel(): Promise<void>;
   saveToGallery(path: string, displayName: string): Promise<string>;
+  analyzeAudio(path: string, fps: number): Promise<{ durationMs: number; envelope: number[] }>;
+  synthesizeVoice(text: string, outPath: string, rate: number, pitch: number): Promise<{ path: string; durationMs: number; envelope: number[] }>;
 };
 
 let native: StudioExportNative | null = null;

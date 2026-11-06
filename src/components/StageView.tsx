@@ -46,7 +46,7 @@ export function StageView({ movie, scene, t, width, selectedId }: { movie: Movie
   const scale = width / STAGE_W, height = STAGE_H * scale;
   const items: Item[] = sceneItems(movie, scene, t);
   return (
-    <Canvas style={{ width, height }}>
+    <Canvas style={{ width, height }} opaque>
       <Group transform={[{ scale }]}>
         <Background id={scene.bg} />
         {items.map((it) => (
