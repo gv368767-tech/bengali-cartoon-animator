@@ -41,6 +41,7 @@ class StudioExportModule : Module() {
     AsyncFunction("cancel") { ->
       session?.abort()
       session = null
+      null
     }
 
     // অডিও ফাইলের দৈর্ঘ্য ও আওয়াজের ওঠানামা (ঠোঁট নড়ানো ও টাইমলাইনের জন্য)
