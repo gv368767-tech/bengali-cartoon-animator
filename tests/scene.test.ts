@@ -4,7 +4,9 @@ import { ASSETS, TOTAL_ASSETS } from "../src/art/registry";
 import { BACKGROUNDS } from "../src/art/backgrounds";
 
 // ৫০টি অ্যাসেট
-assert.equal(TOTAL_ASSETS, 50);
+const LEGACY = ASSETS.filter((a) => a.cat !== "hindu").length + BACKGROUNDS.length;
+assert.equal(LEGACY, 50, "আগের ৫০টি অ্যাসেট অক্ষত");
+assert.equal(TOTAL_ASSETS, 50 + 18, "৫০ + ১১ দেবদেবী + ৭ বাহন");
 assert.equal(BACKGROUNDS.length, 8);
 for (const a of ASSETS) {
   for (const act of a.actions) {
@@ -98,9 +100,9 @@ const u = S.undo(h, 2)!; assert.equal(u.v, 1); assert.equal(S.redo(u.h, u.v)!.v,
 import { ANIMS, VIEWS, searchAnims } from "../src/art/anim";
 import { mouthAt, tokenize } from "../src/lib/lipsync";
 import { buildAsset } from "../src/lib/render";
-assert.equal(ANIMS.length, 30);
+assert.equal(ANIMS.length, 31); // ৩০টি আগের + "আশীর্বাদ"
 assert.equal(VIEWS.length, 5);
-for (const h of ASSETS.filter((a) => a.cat === "human")) {
+for (const h of ASSETS.filter((a) => a.rig === "human")) {
   assert.equal(h.actions.length, ANIMS.length, "মানুষের সব অ্যানিমেশন নেই");
   for (const an of ANIMS) for (const v of VIEWS) for (const ph of [0, 0.9, 2.1, 4]) {
     const sh = buildAsset(h, { action: an.id as any, phase: ph, talk: 0, blink: ph === 0, view: v.id });
@@ -204,6 +206,30 @@ assert.equal(mouthAt("আমি", 5, 2), null);
   assert.equal(S.activeScenes(old).length, 1);
   assert.ok(S.fadeAlpha(old, 0, 1) === 0);
   S.duplicateScene(old, 0);
+}
+
+// ===== v2.3: হিন্দু দেবদেবী =====
+{
+  const D = ["durga", "lakshmi", "ganesha", "shiva", "saraswati", "krishna", "rama", "hanuman", "kali", "kartik", "vishnu"];
+  const hindu = ASSETS.filter((a) => a.cat === "hindu");
+  assert.equal(hindu.length, 18);
+  for (const id of D) { const a = ASSETS.find((x) => x.id === id)!; assert.ok(a && a.rig === "human" && a.talk, id + " নেই"); assert.ok(a.actions.includes("bless" as any), id + " আশীর্বাদ নেই"); }
+  for (const id of ["lion", "mouse", "bull", "owl", "peacock", "swan", "garuda"]) assert.ok(ASSETS.find((x) => x.id === id && x.cat === "hindu"), id + " বাহন নেই");
+  // সব ভিউ ও ঠোঁটের আকৃতি
+  for (const id of D) for (const v of VIEWS) for (const shape of ["A", "E", "O", "U", "M", "C"]) {
+    const a = ASSETS.find((x) => x.id === id)!;
+    const sh = buildAsset(a, { action: "talk", phase: 1.3, talk: 0.5, blink: false, view: v.id, mouth: { shape: shape as any, open: 0.7 } });
+    assert.ok(sh.length > 30 && JSON.stringify(sh).indexOf("NaN") < 0, `${id}/${v.id}/${shape}`);
+  }
+  // ঠোঁট নড়ে: ভিন্ন আকৃতি → ভিন্ন ছবি
+  { const a = ASSETS.find((x) => x.id === "krishna")!; const f = (shape: string) => JSON.stringify(buildAsset(a, { action: "talk", phase: 1, talk: 0.5, blink: false, view: "front", mouth: { shape: shape as any, open: 0.9 } })); assert.notEqual(f("A"), f("M")); }
+  // একই ক্যারেক্টার সব দৃশ্যে একই (cast)
+  let m = S.newMovie("দেব"); const r1 = S.addObject(m, m.scenes[0].id, "durga"); m = r1.movie;
+  assert.equal(m.cast.length, 1); const cid = m.cast[0].id; m = S.addScene(m, 0); const r2 = S.addObject(m, m.scenes[1].id, "durga", cid); assert.equal(r2.movie.cast.length, 1);
+  // বাহন হাঁটে
+  for (const id of ["lion", "mouse", "bull", "owl", "peacock", "swan", "garuda"]) { const a = ASSETS.find((x) => x.id === id)!; const sh = buildAsset(a, { action: "walk", phase: 2, talk: 0, blink: false }); assert.ok(sh.length > 8 && JSON.stringify(sh).indexOf("NaN") < 0, id); }
+  // দেবতার আকার/ঘোরানো: ছবির সীমা ঠিক
+  for (const id of D) { const a = ASSETS.find((x) => x.id === id)!; assert.ok(a.bounds[2] > a.bounds[0] && a.bounds[3] > a.bounds[1]); }
 }
 
 console.log("✅ সব টেস্ট পাস (৫০টি অ্যাসেট সহ)");

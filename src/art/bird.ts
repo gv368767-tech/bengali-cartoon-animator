@@ -4,6 +4,7 @@ import { C, DARK, E, L, PA, PO, Shape, Pose, abs, f, sin, PI } from "./shapes";
 export type BirdDef = {
   body: string; wing: string; belly?: string; beak: string; head: string; tailCol: string;
   size: number; legCol: string; comb?: boolean; longTail?: boolean; neckShine?: string; flatBill?: boolean; crest?: boolean;
+  owl?: boolean; fan?: boolean; swan?: boolean;
 };
 
 export function birdShapes(d: BirdDef, p: Pose): Shape[] {
@@ -21,6 +22,7 @@ export function birdShapes(d: BirdDef, p: Pose): Shape[] {
     S.push(L(-4 * k, bodyY + 18 * k, -4 * k + a, -3, 3.5 * k, d.legCol), L(8 * k, bodyY + 18 * k, 8 * k - a, -3, 3.5 * k, d.legCol));
     S.push(L(-4 * k + a, -3, 6 * k + a, -3, 3 * k, d.legCol), L(8 * k - a, -3, 18 * k - a, -3, 3 * k, d.legCol));
   } else S.push(L(-2 * k, bodyY + 16 * k, 8 * k, bodyY + 26 * k, 3 * k, d.legCol));
+  if (d.fan && !flying) for (let i = 0; i < 9; i++) { const a = 1.9 + i * 0.3, cx = -26 * k + Math.cos(a) * 62 * k, cy = bodyY - 6 * k - Math.sin(a) * 62 * k; S.push(L(-24 * k, bodyY, cx, cy, 3 * k, "#1e8f5a"), E(cx, cy, 11 * k, 15 * k, "#1e8f5a"), E(cx, cy, 6.5 * k, 9 * k, "#2a6fd1"), C(cx, cy, 3 * k, "#ffd84a")); }
   // শরীর
   S.push(E(0, bodyY, 28 * k, 20 * k, d.body));
   if (d.belly) S.push(E(5 * k, bodyY + 7 * k, 20 * k, 11 * k, d.belly));
@@ -30,7 +32,8 @@ export function birdShapes(d: BirdDef, p: Pose): Shape[] {
   S.push(PO([wx, wy, wx - wl * Math.cos(wa + 0.2), wy - wl * Math.sin(wa + 0.9) * 1.2, wx - wl * 0.2 - 14 * k * Math.cos(wa), wy - wl * 0.2 * Math.sin(wa + 0.9) * 1.2 + 14 * k, wx - 10 * k, wy + 12 * k], d.wing));
   if (flying) S.push(PO([wx + 4 * k, wy - 2 * k, wx + wl * 0.7 * Math.cos(-wa), wy - wl * 1.0 * Math.sin(wa + 0.9), wx + 18 * k, wy + 8 * k], d.wing, 0.75));
   // মাথা
-  const hx = 24 * k, hy = bodyY - 18 * k;
+  let hx = 24 * k, hy = bodyY - 18 * k;
+  if (d.swan) { hx = 32 * k; hy = bodyY - 56 * k; S.push(PA(`M ${f(14 * k)} ${f(bodyY - 8 * k)} Q ${f(2 * k)} ${f(bodyY - 40 * k)} ${f(hx - 2 * k)} ${f(hy + 4 * k)}`, undefined, d.body, 11 * k)); }
   if (d.neckShine) S.push(E(16 * k, bodyY - 8 * k, 14 * k, 14 * k, d.neckShine));
   S.push(C(hx, hy, 13 * k, d.head));
   if (d.comb) S.push(C(hx - 3 * k, hy - 14 * k, 5 * k, "#d62828"), C(hx + 3 * k, hy - 15 * k, 5 * k, "#d62828"), C(hx - 9 * k, hy - 11 * k, 4 * k, "#d62828"), E(hx + 12 * k, hy + 14 * k, 4 * k, 7 * k, "#d62828"));
@@ -39,6 +42,7 @@ export function birdShapes(d: BirdDef, p: Pose): Shape[] {
   if (d.flatBill) S.push(E(hx + 18 * k, hy + 4 * k, 12 * k, 4.5 * k, d.beak));
   else S.push(PO([hx + 10 * k, hy - 3 * k, hx + 25 * k, hy + 2 * k - open * 0.2, hx + 10 * k, hy + 5 * k], d.beak), open ? PO([hx + 10 * k, hy + 5 * k, hx + 22 * k, hy + 6 * k + open, hx + 10 * k, hy + 9 * k], d.beak) : PO([hx + 10 * k, hy + 3 * k, hx + 10 * k, hy + 3 * k, hx + 10 * k, hy + 3 * k], d.beak));
   S.push(C(hx + 4 * k, hy - 3 * k, 2.8 * k, DARK), C(hx + 5 * k, hy - 4 * k, 0.9 * k, "#fff"));
+  if (d.owl) S.push(C(hx + 2 * k, hy - 2 * k, 9 * k, "#f3e4c4"), C(hx + 5 * k, hy - 3 * k, 5 * k, "#f2b134"), C(hx + 5 * k, hy - 3 * k, 2.6 * k, DARK), C(hx - 6 * k, hy - 3 * k, 4 * k, "#f3e4c4"), C(hx - 6 * k, hy - 3 * k, 2 * k, DARK));
   return S;
 }
 
@@ -48,4 +52,8 @@ export const BIRDS: Record<string, BirdDef> = {
   pigeon: { body: "#9aa3b2", wing: "#7d8696", belly: "#c4cad6", beak: "#e8b4a0", head: "#8e98a8", tailCol: "#6e7686", size: 1.05, legCol: "#d77a8a", neckShine: "#7fc4a8" },
   duck: { body: "#fafafa", wing: "#e6e6e6", beak: "#ff9f1c", head: "#fafafa", tailCol: "#e6e6e6", size: 1.15, legCol: "#ff9f1c", flatBill: true },
   hen: { body: "#b5651d", wing: "#8b4513", belly: "#d99a5b", beak: "#f2b134", head: "#b5651d", tailCol: "#5a3318", size: 1.2, legCol: "#e0a030", comb: true },
+  owl: { body: "#a67c52", wing: "#7d5a35", belly: "#ead9b8", beak: "#f2b134", head: "#a67c52", tailCol: "#7d5a35", size: 1.3, legCol: "#f2b134", crest: true, owl: true },
+  peacock: { body: "#1f7fb5", wing: "#1a6a99", belly: "#2aa6b8", beak: "#c9a02a", head: "#1f7fb5", tailCol: "#1f9a6e", size: 1.45, legCol: "#8a7a5a", crest: true, fan: true, longTail: true },
+  swan: { body: "#fdfdfd", wing: "#ececf2", belly: "#ffffff", beak: "#f28c28", head: "#fdfdfd", tailCol: "#ececf2", size: 1.5, legCol: "#f28c28", swan: true },
+  garuda: { body: "#c1392b", wing: "#f2b705", belly: "#f2b705", beak: "#f2b705", head: "#fafafa", tailCol: "#f2b705", size: 1.7, legCol: "#f2b705", crest: true },
 };

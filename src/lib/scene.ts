@@ -115,7 +115,7 @@ export function addObject(m: Movie, sceneId: string, assetId: string, castId?: s
   const a = getAsset(assetId)!;
   let movie = m;
   let cid = castId;
-  if (a.cat === "human" && !cid) {
+  if (a.rig === "human" && !cid) {
     const n = m.cast.filter((c) => c.assetId === assetId).length + 1;
     cid = uid();
     movie = { ...movie, cast: [...movie.cast, { id: cid, assetId, name: n > 1 ? `${a.name} ${n}` : a.name }] };
@@ -253,10 +253,10 @@ export function placed(s: Scene, t: number): Placed[] {
     const asset = getAsset(obj.assetId)!;
     const st = evalObj(obj, t);
     let act = actionAt(obj, asset, t);
-    if (asset.cat === "human" && act === "stand" && (s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur) || (s.clips ?? []).some((c) => c.kind === "voice" && c.objId === obj.id && t >= c.t && t <= c.t + c.dur))) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
+    if (asset.rig === "human" && act === "stand" && (s.dialogues.some((d) => d.objId === obj.id && t >= d.t && t <= d.t + d.dur) || (s.clips ?? []).some((c) => c.kind === "voice" && c.objId === obj.id && t >= c.t && t <= c.t + c.dur))) act = "talk"; // কথা বলার সময় নিজে নিজে হাত-মাথা নড়ে
     const air = act === "fly";
     const eff = st.s * (asset.layer === "back" || air ? 1 : depthScale(st.y, bg.horizon));
-    return { obj, asset, st, act, air, eff, flip: asset.side || (asset.cat === "human" && viewAt(obj, t) === "side") ? facingLeft(obj, t) : obj.flip }; // পাশ-মুখী মানুষও চলার দিকে ঘোরে
+    return { obj, asset, st, act, air, eff, flip: asset.side || (asset.rig === "human" && viewAt(obj, t) === "side") ? facingLeft(obj, t) : obj.flip }; // পাশ-মুখী মানুষও চলার দিকে ঘোরে
   });
   const rank = (p: Placed) => (p.asset.layer === "back" ? 0 : p.air ? 2 : 1);
   return list.map((p, i) => ({ p, i })).sort((a, b) => rank(a.p) - rank(b.p) || (rank(a.p) === 1 ? a.p.st.y - b.p.st.y : 0) || a.i - b.i).map((x) => x.p);

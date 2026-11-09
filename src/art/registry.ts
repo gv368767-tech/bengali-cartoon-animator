@@ -4,9 +4,10 @@ import { ANIMALS, quadShapes } from "./animal";
 import { BIRDS, birdShapes } from "./bird";
 import * as P from "./props";
 import { ANIMS } from "./anim";
+import { DEITY_LIST } from "./deity";
 import { BACKGROUNDS } from "./backgrounds";
 
-export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object";
+export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu";
 export type AssetDef = {
   id: string; name: string; cat: Cat;
   layer: "back" | "ground";           // back = সূর্য/মেঘ/পাহাড় (গভীরতা-স্কেল নেই)
@@ -15,13 +16,14 @@ export type AssetDef = {
   shadow: number;                      // ছায়ার প্রস্থ (0 = নেই)
   side: boolean;                       // পাশ-মুখী (চলার দিকে ঘুরবে)
   talk: boolean;
+  rig?: "human";                       // মানুষের হাড়-রিগ (সব অ্যানিমেশন/ভিউ/লিপ-সিঙ্ক)
   bounds: [number, number, number, number];
   build: (p: Pose) => Shape[];
 };
 
 const HA: Action[] = ANIMS.map((a) => a.id);
 const human = (id: string, name: string, scale: number, top: number): AssetDef => ({
-  id, name, cat: "human", layer: "ground", scale, defaultY: 600, actions: HA, defaultAction: "stand", shadow: 50, side: false, talk: true,
+  id, name, cat: "human", layer: "ground", scale, defaultY: 600, actions: HA, defaultAction: "stand", shadow: 50, side: false, talk: true, rig: "human",
   bounds: [-80, top, 80, 8], build: (p) => humanShapes(HUMANS[id], p),
 });
 const animal = (id: string, name: string, scale: number): AssetDef => {
@@ -34,6 +36,12 @@ const bird = (id: string, name: string, scale: number): AssetDef => {
   return { id, name, cat: "bird", layer: "ground", scale, defaultY: 300, actions: ["fly", "stand", "walk", "run"], defaultAction: "fly", shadow: 0, side: true, talk: true,
     bounds: [-100 * d.size, -140 * d.size, 60 * d.size, 8], build: (p) => birdShapes(d, p) };
 };
+const deity = (id: string, name: string, scale: number): AssetDef => ({
+  id, name, cat: "hindu", layer: "ground", scale, defaultY: 600, actions: HA, defaultAction: "stand", shadow: 55, side: false, talk: true, rig: "human",
+  bounds: [-120, -380, 120, 8], build: (p) => humanShapes(HUMANS[id], p),
+});
+const vahanaQ = (id: string, name: string, scale: number): AssetDef => ({ ...animal(id, name, scale), cat: "hindu" });
+const vahanaB = (id: string, name: string, scale: number, def: "fly" | "stand" = "stand"): AssetDef => ({ ...bird(id, name, scale), cat: "hindu", defaultAction: def, defaultY: def === "fly" ? 300 : 600, shadow: def === "fly" ? 0 : 60 });
 const prop = (id: string, name: string, cat: Cat, b: [number, number, number, number], build: (p: Pose) => Shape[], o: Partial<AssetDef> = {}): AssetDef => ({
   id, name, cat, layer: "ground", scale: 1, defaultY: 600, actions: ["stand"], defaultAction: "stand", shadow: 0, side: false, talk: false, bounds: b, build, ...o,
 });
@@ -53,6 +61,10 @@ export const ASSETS: AssetDef[] = [
   animal("cow", "গরু", 0.9), animal("goat", "ছাগল", 1), animal("dog", "কুকুর", 1), animal("cat", "বিড়াল", 1), animal("elephant", "হাতি", 0.85), animal("horse", "ঘোড়া", 0.95), animal("monkey", "বানর", 1),
   // পাখি
   bird("crow", "কাক", 1), bird("parrot", "টিয়া", 1), bird("pigeon", "কবুতর", 1), bird("duck", "হাঁস", 1), bird("hen", "মুরগি", 1),
+  // হিন্দু দেবদেবী (শ্রদ্ধাপূর্ণ কার্টুন) ও তাঁদের বাহন
+  ...DEITY_LIST.map((d) => deity(d.id, d.name, d.scale)),
+  vahanaQ("lion", "সিংহ (দুর্গার বাহন)", 1), vahanaQ("mouse", "ইঁদুর (গণেশের বাহন)", 1.4), vahanaQ("bull", "নন্দী (শিবের বাহন)", 0.95),
+  vahanaB("owl", "পেঁচা (লক্ষ্মীর বাহন)", 1.2), vahanaB("peacock", "ময়ূর (কার্তিকের বাহন)", 1.2), vahanaB("swan", "রাজহংস (সরস্বতীর বাহন)", 1.2), vahanaB("garuda", "গরুড় (বিষ্ণুর বাহন)", 1.1, "fly"),
   // বস্তু
   prop("car", "গাড়ি", "object", [-120, -125, 125, 8], P.car, { actions: ["stand", "walk"], shadow: 110, side: true, scale: 1 }),
   prop("bus", "বাস", "object", [-155, -135, 155, 8], P.bus, { actions: ["stand", "walk"], shadow: 150, side: true, scale: 0.95 }),
@@ -78,5 +90,5 @@ export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? BAC
 export const TOTAL_ASSETS = ASSETS.length + BACKGROUNDS.length;
 export const CATS: { id: Cat; name: string }[] = [
   { id: "bg", name: "ব্যাকগ্রাউন্ড" }, { id: "human", name: "মানুষ" }, { id: "animal", name: "প্রাণী" },
-  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" },
+  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" },
 ];

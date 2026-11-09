@@ -8,7 +8,10 @@ export type HumanDef = {
   lower: "shorts" | "pants" | "lungi" | "none";
   head: number; shoe: string;
   extras: ("glasses" | "moustache" | "hat" | "gamchha" | "book" | "tie" | "stick" | "bindi")[];
+  deco?: (a: Anchors) => Deco; // সাজসজ্জা/অতিরিক্ত হাত/বাহন-ছাড়া অলংকার (দেবদেবী ইত্যাদি) — না থাকলে আগের মতোই
 };
+export type Anchors = { hx: number; hy: number; r: number; sy: number; dx: number; dy: number; view: View; wk: number; hL: [number, number]; hR: [number, number]; eL: [number, number]; eR: [number, number]; ph: number; act: string; skin: string };
+export type Deco = { mid?: Shape[]; back?: Shape[]; headUnder?: Shape[]; headOver?: Shape[]; front?: Shape[] };
 
 
 // ====================== রিগ (শরীরের জোড়া ও ভঙ্গি) ======================
@@ -48,6 +51,7 @@ export function rigFor(act: string, ph: number): Rig {
       r.L = { a: [0.45, PI + 0.8 + 0.55 * cp] }; r.R = { a: [0.45, PI + 0.8 + 0.55 * cp] }; r.armsFront = true; r.expr = "smile"; r.eyes = "happy"; r.noHold = true; r.bob = -abs(sin(ph * 0.5)) * 2; break;
     }
     case "salute": r.R = { a: [2.4, PI + 0.9 + 0.05 * sin(ph * 2)] }; r.headR = true; r.bob = 0; r.sh = sin(ph * 0.6) * 1.4; r.hd = sin(ph * 0.5) * 1.2; r.noHold = true; break;
+    case "bless": r.R = { a: [2.05, 2.05 + 0.05 * sin(ph * 1.5)] }; r.L = { a: [0.35, 0.5] }; r.hd = sin(ph * 0.5) * 1.5; r.expr = "smile"; r.noHold = true; r.bob = sin(ph * 0.6) * 1.2; break;
     case "point": r.R = { a: [1.5, 1.5 + 0.08 * s] }; r.expr = "smile"; r.noHold = true; r.prop = "finger"; break;
     case "thumbsup": r.R = { a: [0.9, PI + 0.15] }; r.expr = "smile"; r.eyes = "happy"; r.noHold = true; r.prop = "thumb"; r.hd = -1 - 1.5 * abs(s); break;
     case "namaste": r.L = { h: [-9, -180] }; r.R = { h: [9, -180] }; r.armsFront = true; r.hd = 4 + 3 * s; r.expr = "smile"; r.noHold = true; break;
@@ -108,7 +112,7 @@ const shade = (hex: string, k = 0.84) => {
 const VW: Record<View, { wk: number; mv: number }> = { front: { wk: 1, mv: 1 }, q_front: { wk: 0.86, mv: 0.85 }, q_back: { wk: 0.86, mv: 0.85 }, back: { wk: 1, mv: 1 }, side: { wk: 0.56, mv: 1 } };
 
 // ====================== মাথা ও মুখ ======================
-type Face = { hx: number; hy: number; r: number; view: View; expr: Expr; eyes: Eyes; mouth: Mouth | null; ph: number; legacyTalk: number; tint?: boolean };
+type Face = { headUnder?: Shape[]; headOver?: Shape[]; hx: number; hy: number; r: number; view: View; expr: Expr; eyes: Eyes; mouth: Mouth | null; ph: number; legacyTalk: number; tint?: boolean };
 
 function mouthShapes(S: Shape[], mx: number, my: number, r: number, ws: number, m: Mouth) {
   const o = m.open;
@@ -177,14 +181,16 @@ function headShapes(S: Shape[], d: HumanDef, G: Face): void {
   const hairCol = st === "none" || st === "elder" ? skin : hair;
   const cap = (cx: number) => `M ${f(cx - r)} ${f(hy)} C ${f(cx - r)} ${f(hy - r * 1.4)}, ${f(cx + r)} ${f(hy - r * 1.4)}, ${f(cx + r)} ${f(hy)} C ${f(cx + r * 0.6)} ${f(hy - r * 0.55)}, ${f(cx - r * 0.6)} ${f(hy - r * 0.55)}, ${f(cx - r)} ${f(hy)} Z`;
   // ---- মাথার পেছনের জিনিস ----
-  if (st === "long") S.push(R(sd ? hx - r * 1.1 : hx - r, hy - r * 0.2, sd ? r * 1.0 : r * 2, r * 1.75, hair, r * 0.5));
+  if (st === "long") { if (sd || view === "back" || view === "q_back") S.push(R(sd ? hx - r * 1.1 : hx - r, hy - r * 0.2, sd ? r * 1.0 : r * 2, r * 1.75, hair, r * 0.5)); else S.push(R(hx - r * 1.12, hy - r * 0.3, r * 0.5, r * 1.9, hair, r * 0.25), R(hx + r * 0.62, hy - r * 0.3, r * 0.5, r * 1.9, hair, r * 0.25)); }
   if (st === "bun") S.push(C(sd ? hx - r * 0.5 : hx, hy - r * 1.15, r * 0.42, hair));
   if (sd) { S.push(C(hx - r * 0.1, hy + 2, r * 0.2, shade(skin, 0.92))); }
   else if (qf) S.push(C(hx - r - 1, hy + 2, r * 0.2, skin));
   else if (qb) S.push(C(hx + r * 0.88, hy + 2, r * 0.2, skin));
   else S.push(C(hx - r - 1, hy + 2, r * 0.2, skin), C(hx + r + 1, hy + 2, r * 0.2, skin));
   // ---- মাথা ----
+  if (G.headUnder) S.push(...G.headUnder);
   S.push(C(hx, hy, r, skin));
+  if (G.headOver) S.push(...G.headOver);
   if (sd) {
     S.push(PO([hx + r * 0.9, hy + r * 0.0, hx + r * 1.14, hy + r * 0.3, hx + r * 0.88, hy + r * 0.34], skin));
     S.push(C(hx - r * 0.12, hy + 2, r * 0.17, shade(skin, 0.9)));
@@ -309,6 +315,8 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   const r = 44 * d.head;
   const hx = dx + rg.tilt * 40, hy = -222 - r * 0.85 + dy + rg.sh + rg.hd;
 
+  const dc: Deco | undefined = d.deco ? d.deco({ hx, hy, r, sy, dx, dy, view, wk, hL: pL.h, hR: pR.h, eL: pL.e, eR: pR.e, ph, act: p.action, skin }) : undefined;
+  if (dc?.back) S.push(...dc.back);
   const props = propShapes(rg.prop, { ph, hL: pL.h, hR: pR.h, eR: pR.e, hx, hy, r, d });
   S.push(...props.back);
 
@@ -359,6 +367,7 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   if (d.extras.includes("tie") && !bk && !sd) S.push(PO([T(-5), -212 + dy, T(5), -212 + dy, T(8), -160 + dy, T(0), -150 + dy, T(-8), -160 + dy], "#c0392b"));
   if (d.extras.includes("gamchha")) S.push(PO([T(-34), -212 + dy, T(-12), -217 + dy, T(38), -108 + dy, T(14), -102 + dy], "#d94141"), L(T(-10), -190 + dy, T(28), -118 + dy, 3, "#fff", 0.8));
   S.push(...props.mid);
+  if (dc?.mid) S.push(...dc.mid);
 
   // ---- সামনের হাত ----
   if (rg.armsFront && !farFirst && !rg.headL) arm(pL, shL, false);
@@ -371,11 +380,12 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   // ---- গলা ও মাথা ----
   S.push(R(hx - 9, -232 + dy + rg.sh * 0.5, 18, 24, skin));
   headShapes(S, d, {
-    hx, hy, r, view, expr: rg.expr, eyes: p.blink && rg.eyes === "open" ? "closed" : rg.eyes, ph, legacyTalk: p.mouth ? 0 : p.talk,
+    headUnder: dc?.headUnder, headOver: dc?.headOver, hx, hy, r, view, expr: rg.expr, eyes: p.blink && rg.eyes === "open" ? "closed" : rg.eyes, ph, legacyTalk: p.mouth ? 0 : p.talk,
     mouth: p.mouth ?? (rg.talk && p.talk <= 0.12 ? synth(ph) : null),
   });
   if (rg.headL) arm(pL, shL, false);
   if (rg.headR) arm(pR, shR, false);
+  if (dc?.front) S.push(...dc.front);
   S.push(...props.front);
   return S;
 }

@@ -5,8 +5,9 @@ export type QuadDef = {
   body: string; belly?: string; head: string; ear: string; legCol: string; hoof: string;
   bx: number; bodyRx: number; bodyRy: number; bodyY: number;
   hx: number; hy: number; hr: number; neck?: number;
-  ears: "cow" | "dog" | "cat" | "goat" | "horse" | "elephant" | "monkey";
-  tail: "cow" | "dog" | "cat" | "horse" | "monkey" | "goat" | "elephant";
+  ears: "cow" | "dog" | "cat" | "goat" | "horse" | "elephant" | "monkey" | "lion" | "mouse";
+  tail: "cow" | "dog" | "cat" | "horse" | "monkey" | "goat" | "elephant" | "lion" | "mouse";
+  lionMane?: string; hump?: boolean; saddle?: string;
   muzzle?: string; snout: number;
   horns?: string; trunk?: boolean; tusks?: boolean; mane?: string; spots?: string; udder?: boolean; beard?: boolean; whiskers?: boolean; legW: number;
 };
@@ -41,6 +42,8 @@ export function quadShapes(d: QuadDef, p: Pose): Shape[] {
   else if (d.tail === "cat") S.push(PA(`M ${f(tx)} ${f(ty + 6)} Q ${f(tx - 50)} ${f(ty + 10)} ${f(tx - 40 + wag)} ${f(ty - 50)}`, undefined, d.body, 9));
   else if (d.tail === "horse") S.push(PA(`M ${f(tx)} ${f(ty)} Q ${f(tx - 40)} ${f(ty + 20 + wag)} ${f(tx - 30)} ${f(ty + 90)}`, undefined, d.mane ?? DARK, 14));
   else if (d.tail === "monkey") S.push(PA(`M ${f(tx)} ${f(ty)} Q ${f(tx - 60)} ${f(ty - 10)} ${f(tx - 55)} ${f(ty - 70)} Q ${f(tx - 50 + wag)} ${f(ty - 100)} ${f(tx - 30)} ${f(ty - 85)}`, undefined, d.body, 9));
+  else if (d.tail === "lion") S.push(PA(`M ${f(tx)} ${f(ty + 6)} Q ${f(tx - 50)} ${f(ty + 20 + wag)} ${f(tx - 46)} ${f(ty - 30)}`, undefined, d.body, 8), C(tx - 46, ty - 34, 10, d.lionMane ?? "#8a4b14"))
+  else if (d.tail === "mouse") S.push(PA(`M ${f(tx)} ${f(ty + 4)} Q ${f(tx - 40)} ${f(ty + 22 + wag)} ${f(tx - 60)} ${f(ty - 6)}`, undefined, "#e8a0a8", 3.5))
   else if (d.tail === "goat") S.push(PO([tx, ty, tx - 18, ty - 18 + wag * 0.4, tx - 4, ty + 6], d.body));
   else S.push(L(tx, ty + 6, tx - 14, ty + 48, 7, shade(d.body)), E(tx - 14, ty + 52, 5, 7, shade(d.body)));
   legs.filter((l) => l.far).forEach(leg);
@@ -48,6 +51,8 @@ export function quadShapes(d: QuadDef, p: Pose): Shape[] {
   S.push(E(d.bx, d.bodyY + dy, d.bodyRx, d.bodyRy, d.body));
   if (d.belly) S.push(E(d.bx + 6, d.bodyY + dy + d.bodyRy * 0.45, d.bodyRx * 0.75, d.bodyRy * 0.5, d.belly));
   if (d.spots) S.push(E(d.bx - 20, d.bodyY + dy - 12, 24, 18, d.spots), E(d.bx + 30, d.bodyY + dy + 8, 20, 15, d.spots), E(d.bx - 55, d.bodyY + dy + 14, 14, 11, d.spots));
+  if (d.hump) S.push(E(d.bx + d.bodyRx * 0.5, d.bodyY + dy - d.bodyRy * 0.85, 34, 28, d.body));
+  if (d.saddle) S.push(E(d.bx - 4, d.bodyY + dy - d.bodyRy * 0.8, d.bodyRx * 0.55, 9, d.saddle));
   if (d.udder) S.push(E(d.bx - 8, hipY + dy + 8, 16, 11, "#f4a6b8"));
   legs.filter((l) => !l.far).forEach(leg);
   // ---- গলা ও মাথা ----
@@ -59,12 +64,15 @@ export function quadShapes(d: QuadDef, p: Pose): Shape[] {
   if (d.ears === "monkey") S.push(C(hx - r * 0.1, hy - r * 0.05, r * 0.38, d.head), C(hx - r * 0.1, hy - r * 0.05, r * 0.22, "#e8b89a"));
   if (d.horns === "cow") S.push(PA(`M ${f(hx - r * 0.2)} ${f(hy - r * 0.85)} Q ${f(hx - r * 0.5)} ${f(hy - r * 1.4)} ${f(hx - r * 0.1)} ${f(hy - r * 1.5)}`, undefined, "#f2ead3", 8));
   if (d.horns === "goat") S.push(PA(`M ${f(hx - r * 0.1)} ${f(hy - r * 0.85)} Q ${f(hx - r * 0.7)} ${f(hy - r * 1.5)} ${f(hx - r * 0.9)} ${f(hy - r * 1.1)}`, undefined, "#d8cfb0", 7));
+  if (d.lionMane) S.push(C(hx - r * 0.2, hy, r * 1.5, d.lionMane));
   S.push(E(hx, hy, r * 1.05, r, d.head));
   if (d.snout > 0) S.push(E(hx + r * 0.65, hy + r * 0.3, d.snout, r * 0.62, d.muzzle ?? d.head));
   if (d.trunk) { S.push(PA(`M ${f(hx + r * 0.7)} ${f(hy + r * 0.1)} Q ${f(hx + r * 1.7)} ${f(hy + r * 0.5)} ${f(hx + r * 1.3)} ${f(hy + r * 1.7 + sin(ph * 1.5) * 6)}`, undefined, d.head, r * 0.55)); }
   if (d.tusks) S.push(PA(`M ${f(hx + r * 0.6)} ${f(hy + r * 0.55)} Q ${f(hx + r * 1.3)} ${f(hy + r * 0.9)} ${f(hx + r * 1.25)} ${f(hy + r * 0.45)}`, undefined, "#fffbe8", 7));
   // কান (সামনের)
   const ex = hx - r * 0.2;
+  if (d.ears === "lion") S.push(C(ex - r * 0.2, hy - r * 0.95, r * 0.28, d.ear), C(ex - r * 0.2, hy - r * 0.95, r * 0.14, "#f4a6b8"));
+  if (d.ears === "mouse") S.push(E(ex - r * 0.2, hy - r * 1.0, r * 0.5, r * 0.6, d.ear), E(ex - r * 0.2, hy - r * 1.0, r * 0.32, r * 0.42, "#f4a6b8"));
   if (d.ears === "cow") S.push(E(ex - r * 0.45, hy - r * 0.55, r * 0.5, r * 0.2, d.head), E(ex - r * 0.45, hy - r * 0.55, r * 0.3, r * 0.1, "#f4a6b8"));
   if (d.ears === "dog") S.push(E(ex - r * 0.15, hy + r * 0.1, r * 0.3, r * 0.7, d.ear));
   if (d.ears === "cat") S.push(PO([ex - r * 0.7, hy - r * 0.6, ex - r * 0.55, hy - r * 1.5, ex + r * 0.1, hy - r * 0.9], d.head), PO([ex - r * 0.55, hy - r * 0.75, ex - r * 0.5, hy - r * 1.25, ex - r * 0.1, hy - r * 0.9], "#f4a6b8"), PO([ex + r * 0.4, hy - r * 0.8, ex + r * 0.75, hy - r * 1.5, ex + r * 0.95, hy - r * 0.5], d.head));
@@ -96,4 +104,7 @@ export const ANIMALS: Record<string, QuadDef> = {
   elephant: { body: "#9aa3b2", head: "#9aa3b2", ear: "#8a93a2", legCol: "#9aa3b2", hoof: "#6f7787", bx: 0, bodyRx: 120, bodyRy: 78, bodyY: -140, hx: 140, hy: -158, hr: 58, neck: 70, ears: "elephant", tail: "elephant", snout: 0, trunk: true, tusks: true, legW: 36 },
   horse: { body: "#8b5a2b", head: "#8b5a2b", ear: "#8b5a2b", legCol: "#8b5a2b", hoof: "#2b2b33", bx: 0, bodyRx: 88, bodyRy: 38, bodyY: -135, hx: 120, hy: -205, hr: 28, neck: 40, ears: "horse", tail: "horse", muzzle: "#a8743f", snout: 30, mane: "#2b2b33", legW: 12 },
   monkey: { body: "#8a5a35", belly: "#e8c49a", head: "#8a5a35", ear: "#8a5a35", legCol: "#8a5a35", hoof: "#6e4426", bx: 0, bodyRx: 44, bodyRy: 30, bodyY: -75, hx: 58, hy: -110, hr: 28, neck: 24, ears: "monkey", tail: "monkey", muzzle: "#e8c49a", snout: 16, legW: 12 },
+  lion: { body: "#e0a43a", belly: "#f4d9a0", head: "#e0a43a", ear: "#e0a43a", legCol: "#e0a43a", hoof: "#7a5a20", bx: 0, bodyRx: 82, bodyRy: 36, bodyY: -96, hx: 102, hy: -128, hr: 30, neck: 34, ears: "lion", tail: "lion", muzzle: "#f4d9a0", snout: 22, lionMane: "#8a4b14", whiskers: true, legW: 15 },
+  mouse: { body: "#a9a9b8", belly: "#e2e2ea", head: "#a9a9b8", ear: "#a9a9b8", legCol: "#a9a9b8", hoof: "#8a8a98", bx: 0, bodyRx: 36, bodyRy: 21, bodyY: -36, hx: 48, hy: -52, hr: 17, neck: 12, ears: "mouse", tail: "mouse", muzzle: "#e2e2ea", snout: 12, whiskers: true, legW: 6 },
+  bull: { body: "#f4f1ea", head: "#f4f1ea", ear: "#f4f1ea", legCol: "#f4f1ea", hoof: "#3b2f2f", bx: 0, bodyRx: 92, bodyRy: 46, bodyY: -108, hx: 114, hy: -136, hr: 34, neck: 38, ears: "cow", tail: "cow", muzzle: "#f4a6b8", snout: 26, horns: "cow", hump: true, saddle: "#d62828", legW: 17 },
 };

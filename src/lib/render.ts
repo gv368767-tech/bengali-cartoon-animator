@@ -7,7 +7,7 @@ import { Look, Movie, Scene, blinkAt, mouthOf, phaseAt, placed, talkAt, viewAt }
 export type Item = { id: string; asset: AssetDef; x: number; y: number; sx: number; sy: number; rot: number; shadow: number; shapes: Shape[] };
 
 export function buildAsset(a: AssetDef, pose: Pose, look?: Look): Shape[] {
-  if (a.cat === "human" && look && Object.keys(look).length) return humanShapes({ ...HUMANS[a.id], ...look }, pose);
+  if (a.rig === "human" && look && Object.keys(look).length) return humanShapes({ ...HUMANS[a.id], ...look }, pose);
   return a.build(pose);
 }
 

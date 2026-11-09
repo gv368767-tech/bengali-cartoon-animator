@@ -27,6 +27,14 @@ jobs:
           FP=$(keytool -printcert -jarfile "$APK" | grep "SHA256:" | head -1 | sed 's/.*SHA256: *//')
           echo "cert: $FP"
           test "$FP" = "FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C"
+      - name: Privacy gate - the APK must have NO internet permission and NO cloud backup
+        run: |
+          APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          AAPT=$(ls $ANDROID_HOME/build-tools/*/aapt2 | tail -1)
+          $AAPT dump permissions "$APK" | tee perms.txt
+          ! grep -E "INTERNET|ACCESS_NETWORK_STATE|RECORD_AUDIO|SYSTEM_ALERT_WINDOW" perms.txt
+          $AAPT dump xmltree --file AndroidManifest.xml "$APK" | grep -i "allowBackup" | tee backup.txt
+          grep -q "allowBackup.*=(type 0x12)0x0" backup.txt
       - name: Verify package name and versionCode match the installed app
         run: |
           APK=$(ls android/app/build/outputs/apk/release/*.apk | head -1)

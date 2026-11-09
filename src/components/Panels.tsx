@@ -31,7 +31,7 @@ function LibraryPanelImpl({ movie, scene, onAdd, onBg }: { movie: Movie; scene: 
           <TouchableOpacity key={c.id} onPress={() => setCat(c.id)} style={[s.tab, cat === c.id && s.tabOn]}><Text style={[s.tabTxt, cat === c.id && { color: "#111" }]}>{c.name}</Text></TouchableOpacity>
         ))}
       </ScrollView>
-      {cat === "human" && movie.cast.length > 0 && (
+      {(cat === "human" || cat === "hindu") && movie.cast.length > 0 && (
         <View><Text style={s.sub}>আমার ক্যারেক্টার (সব দৃশ্যে একই চেহারা)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {movie.cast.map((cm: CastMember) => (
@@ -40,7 +40,7 @@ function LibraryPanelImpl({ movie, scene, onAdd, onBg }: { movie: Movie; scene: 
               </TouchableOpacity>))}
           </ScrollView></View>
       )}
-      {cat === "human" && <Text style={s.sub}>নতুন ক্যারেক্টার</Text>}
+      {(cat === "human" || cat === "hindu") && <Text style={s.sub}>নতুন ক্যারেক্টার</Text>}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {cat === "bg"
           ? BACKGROUNDS.map((b) => (

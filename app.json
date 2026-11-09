@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bengali Cartoon Studio",
     "slug": "bengali-cartoon-studio",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "orientation": "portrait",
     "splash": {
       "image": "./assets/splash.png",
@@ -14,12 +14,19 @@
     ],
     "android": {
       "package": "com.bengalicartoon.animator",
-      "versionCode": 11,
+      "versionCode": 12,
       "backgroundColor": "#15171c",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FDD620"
-      }
+      },
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "icon": "./assets/icon.png"
   }

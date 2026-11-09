@@ -12,7 +12,7 @@ export type View = "front" | "q_front" | "q_back" | "back" | "side";
 // মানুষের অ্যানিমেশন (HumanAction) — বাকিগুলো প্রাণী/পাখি/বস্তুর
 export type HumanAction =
   | "talk" | "clap" | "salute" | "point" | "thumbsup" | "namaste" | "bow" | "shrug" | "cheer"
-  | "angry" | "laugh" | "cry" | "scared" | "think" | "cook" | "teach" | "carry" | "read" | "write" | "eat" | "drink" | "phone" | "sleep";
+  | "bless" | "angry" | "laugh" | "cry" | "scared" | "think" | "cook" | "teach" | "carry" | "read" | "write" | "eat" | "drink" | "phone" | "sleep";
 export type Action = "auto" | "stand" | "walk" | "run" | "jump" | "sit" | "dance" | "wave" | "fly" | HumanAction;
 // ঠোঁটের আকৃতি (লিপ-সিঙ্ক): A=হাঁ, E=চওড়া, O=গোল, U=ছোট গোল, M=বন্ধ, C=আধখোলা (ব্যঞ্জন)
 export type Mouth = { shape: "A" | "E" | "O" | "U" | "M" | "C"; open: number };

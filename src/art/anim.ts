@@ -23,6 +23,7 @@ export const ANIMS: AnimDef[] = [
   { id: "namaste", bn: "নমস্কার", en: "Greeting", cat: "gesture", kw: ["সালাম", "namaste", "welcome"] },
   { id: "bow", bn: "মাথা নত", en: "Bowing", cat: "gesture", kw: ["প্রণাম", "কুর্নিশ"] },
   { id: "shrug", bn: "জানি না", en: "Shrug", cat: "gesture", kw: ["কাঁধ ঝাঁকানো", "dont know"] },
+  { id: "bless", bn: "আশীর্বাদ", en: "Blessing", cat: "gesture", kw: ["আশীর্বাদ", "অভয়", "bless", "blessing"] },
   { id: "cheer", bn: "উল্লাস", en: "Cheering", cat: "gesture", kw: ["জয়", "আনন্দ", "hooray"] },
   { id: "angry", bn: "রাগ", en: "Angry", cat: "emotion", kw: ["রেগে", "ক্রোধ"] },
   { id: "laugh", bn: "হাসি", en: "Laughing", cat: "emotion", kw: ["হাসা", "মজা", "funny"] },
