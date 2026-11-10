@@ -11,6 +11,7 @@ export function shapesToSvg(shapes: Shape[]): { defs: string; body: string } {
       case "line": body += `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}" stroke="${s.color}" stroke-width="${s.w}" stroke-linecap="round"${op(s.op)}/>`; break;
       case "path": body += `<path d="${s.d}" fill="${s.fill ?? "none"}"${s.stroke ? ` stroke="${s.stroke}" stroke-width="${s.sw ?? 3}" stroke-linecap="round" stroke-linejoin="round"` : ""}${op(s.op)}/>`; break;
       case "poly": body += `<polygon points="${s.pts.join(" ")}" fill="${s.fill}"${op(s.op)}/>`; break;
+      case "img": break; // ছবি-অংশ শুধু স্ক্রিন/MP4-এ
       case "grad": { const id = "g" + gid++; defs += `<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.c1}"/><stop offset="1" stop-color="${s.c2}"/></linearGradient>`; body += `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" fill="url(#${id})"/>`; }
     }
   }

@@ -3,6 +3,7 @@ import { requireNativeModule } from "expo";
 export type StudioExportNative = {
   begin(config: string): Promise<string>;
   setBackground(key: string, shapesJson: string): Promise<void>;
+  setAtlases(pathsJson: string): Promise<void>;
   drawFrames(framesJson: string): Promise<void>;
   finish(): Promise<string>;
   cancel(): Promise<void>;

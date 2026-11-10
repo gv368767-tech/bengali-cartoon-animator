@@ -4,9 +4,9 @@ import { ASSETS, TOTAL_ASSETS } from "../src/art/registry";
 import { BACKGROUNDS } from "../src/art/backgrounds";
 
 // ৫০টি অ্যাসেট
-const LEGACY = ASSETS.filter((a) => a.cat !== "hindu").length + BACKGROUNDS.length;
+const LEGACY = ASSETS.filter((a) => a.cat !== "hindu" && a.cat !== "style2").length + BACKGROUNDS.length;
 assert.equal(LEGACY, 50, "আগের ৫০টি অ্যাসেট অক্ষত");
-assert.equal(TOTAL_ASSETS, 50 + 18, "৫০ + ১১ দেবদেবী + ৭ বাহন");
+assert.equal(TOTAL_ASSETS, 50 + 18 + 13, "৫০ + ১৮ দেবদেবী/বাহন + ১৩ নতুন স্টাইল");
 assert.equal(BACKGROUNDS.length, 8);
 for (const a of ASSETS) {
   for (const act of a.actions) {

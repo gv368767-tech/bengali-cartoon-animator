@@ -1,13 +1,23 @@
-import React, { memo, useMemo } from "react";
+import React, { memo, useEffect, useMemo, useState } from "react";
 import { Canvas, Circle, Group, LinearGradient, Oval, Path, Rect, RoundedRect, Line, vec } from "@shopify/react-native-skia";
 import type { Shape } from "../art/shapes";
+import { Image as SkImg } from "@shopify/react-native-skia";
+import { atlasImage, onSpriteLoaded } from "../art/spriteImages";
 import { BACKGROUNDS } from "../art/backgrounds";
 import { AssetDef } from "../art/registry";
 import { Movie, Scene, STAGE_H, STAGE_W } from "../lib/scene";
 import { Item, buildAsset, polyD, sceneItems } from "../lib/render";
 
+const AW = (k: string) => atlasImage(k);
 function node(s: Shape, k: string): React.ReactNode {
   switch (s.t) {
+    case "img": {
+      const im = AW(s.k); if (!im) return null;
+      const fx = s.w / s.pw, fy = s.h / s.ph;
+      return <Group key={k} transform={[{ translateX: s.e }, { translateY: s.f }, { rotate: (s.r * Math.PI) / 180 }, { scale: s.s }]} clip={{ x: s.x, y: s.y, width: s.w, height: s.h }} opacity={s.op}>
+        <SkImg image={im} x={s.x - s.u * fx} y={s.y - s.v * fy} width={im.width() * fx} height={im.height() * fy} fit="fill" />
+      </Group>;
+    }
     case "rect":
       return s.r ? <RoundedRect key={k} x={s.x} y={s.y} width={s.w} height={s.h} r={s.r} color={s.fill} opacity={s.op} />
         : <Rect key={k} x={s.x} y={s.y} width={s.w} height={s.h} color={s.fill} opacity={s.op} />;
@@ -31,7 +41,11 @@ function node(s: Shape, k: string): React.ReactNode {
       return <Rect key={k} x={s.x} y={s.y} width={s.w} height={s.h}><LinearGradient start={vec(s.x, s.y)} end={vec(s.x, s.y + s.h)} colors={[s.c1, s.c2]} /></Rect>;
   }
 }
-export const Shapes = ({ shapes, p = "s" }: { shapes: Shape[]; p?: string }) => <>{shapes.map((s, i) => node(s, p + i))}</>;
+export const Shapes = ({ shapes, p = "s" }: { shapes: Shape[]; p?: string }) => {
+  const [, bump] = useState(0);
+  useEffect(() => onSpriteLoaded(() => bump((n) => n + 1)), []);
+  return <>{shapes.map((s, i) => node(s, p + i))}</>;
+};
 
 const Background = memo(({ id }: { id: string }) => {
   const bg = BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0];

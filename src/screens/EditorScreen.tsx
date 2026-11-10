@@ -117,7 +117,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
       const d = dragRef.current;
       if (d.id && !d.moved) { // শুধু ট্যাপ — মানুষ হলে অ্যানিমেশন প্যানেল খুলুন
         const o = R.current.scene.objects.find((x) => x.id === d.id);
-        if (o && getAsset(o.assetId)?.rig === "human") { setAnimT(R.current.t); setSheet("anim"); }
+        if (o && !!getAsset(o.assetId)?.rig) { setAnimT(R.current.t); setSheet("anim"); }
       }
     },
   }), [stageW, commit]);
@@ -274,7 +274,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
               {actions.map((a) => <TouchableOpacity key={a} style={s.chip} onPress={() => editSel((o) => setAction(o, t, a))}><Text style={s.chipTxt}>{ACTION_BN[a] ?? a}</Text></TouchableOpacity>)}
             </ScrollView>
             <View style={[s.wrap, { marginTop: 8 }]}>
-              {selAsset.rig === "human" && <Btn label="🎭 অ্যানিমেশন" onPress={() => { setAnimT(t); setSheet("anim"); }} />}
+              {!!selAsset.rig && <Btn label="🎭 অ্যানিমেশন" onPress={() => { setAnimT(t); setSheet("anim"); }} />}
               {selAsset.talk && <Btn label="💬 কথা বলান" onPress={() => setSheet("dialogue")} />}
               {selCast && selAsset.rig === "human" && <Btn label="🎨 চেহারা/পোশাক" onPress={() => setSheet("look")} />}
             </View>
@@ -307,7 +307,7 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
         </View>
       </ScrollView>
 
-      {sheet === "anim" && selObj && selAsset && selAsset.rig === "human" && (
+      {sheet === "anim" && selObj && selAsset && !!selAsset.rig && (
         <AnimationPanel
           name={selCast?.name ?? selAsset.name} asset={selAsset} look={selCast?.look as Look | undefined}
           curAction={actionAt(selObj, selAsset, animT) as any} curView={viewAt(selObj, animT) as ViewT} t={animT}

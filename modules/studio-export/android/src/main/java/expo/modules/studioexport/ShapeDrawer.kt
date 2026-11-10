@@ -1,6 +1,9 @@
 package expo.modules.studioexport
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Rect
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -14,6 +17,11 @@ import org.json.JSONObject
 /** JS-এর Shape তালিকা (rect/circle/ellipse/line/path/poly/grad) Android Canvas-এ আঁকে। */
 object ShapeDrawer {
   private val pathCache = HashMap<String, Path>()
+  private val atlasPaths = HashMap<String, String>()
+  private val atlasBmp = HashMap<String, Bitmap?>()
+  private val imgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+  fun setAtlases(o: JSONObject) { atlasPaths.clear(); atlasBmp.clear(); for (k in o.keys()) atlasPaths[k] = o.getString(k) }
+  private fun atlas(k: String): Bitmap? = atlasBmp.getOrPut(k) { atlasPaths[k]?.let { BitmapFactory.decodeFile(it) } }
   private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
   private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
     style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
@@ -59,6 +67,19 @@ object ShapeDrawer {
   private fun draw(c: Canvas, s: JSONObject) {
     val op = s.optDouble("op", 1.0)
     when (s.getString("t")) {
+      "img" -> {
+        val bmp = atlas(s.getString("k")) ?: return
+        val w = s.getDouble("w").toFloat(); val h = s.getDouble("h").toFloat()
+        val u = s.getInt("u"); val v = s.getInt("v"); val pw = s.getInt("pw"); val ph = s.getInt("ph")
+        imgPaint.alpha = (255 * op).toInt().coerceIn(0, 255)
+        c.save()
+        c.translate(s.getDouble("e").toFloat(), s.getDouble("f").toFloat())
+        c.rotate(s.getDouble("r").toFloat())
+        val sc = s.getDouble("s").toFloat(); c.scale(sc, sc)
+        val x = s.getDouble("x").toFloat(); val y = s.getDouble("y").toFloat()
+        c.drawBitmap(bmp, Rect(u, v, u + pw, v + ph), RectF(x, y, x + w, y + h), imgPaint)
+        c.restore()
+      }
       "rect" -> {
         val x = s.getDouble("x").toFloat(); val y = s.getDouble("y").toFloat()
         val w = s.getDouble("w").toFloat(); val h = s.getDouble("h").toFloat()

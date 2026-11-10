@@ -6,6 +6,7 @@ export type Shape =
   | { t: "line"; x1: number; y1: number; x2: number; y2: number; w: number; color: string; op?: number }
   | { t: "path"; d: string; fill?: string; stroke?: string; sw?: number; op?: number }
   | { t: "poly"; pts: number[]; fill: string; op?: number }
+  | { t: "img"; k: string; u: number; v: number; pw: number; ph: number; x: number; y: number; w: number; h: number; e: number; f: number; r: number; s: number; op?: number }
   | { t: "grad"; x: number; y: number; w: number; h: number; c1: string; c2: string };
 
 export type View = "front" | "q_front" | "q_back" | "back" | "side";

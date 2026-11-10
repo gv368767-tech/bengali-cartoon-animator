@@ -29,6 +29,10 @@ class StudioExportModule : Module() {
       (session ?: throw Exception("এক্সপোর্ট শুরু হয়নি")).setBackground(key, JSONArray(shapes))
     }
 
+    AsyncFunction("setAtlases") { paths: String ->
+      ShapeDrawer.setAtlases(JSONObject(paths))
+    }
+
     AsyncFunction("drawFrames") { frames: String ->
       (session ?: throw Exception("এক্সপোর্ট শুরু হয়নি")).drawFrames(JSONArray(frames))
     }

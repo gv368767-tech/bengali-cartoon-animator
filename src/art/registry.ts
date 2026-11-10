@@ -6,8 +6,9 @@ import * as P from "./props";
 import { ANIMS } from "./anim";
 import { DEITY_LIST } from "./deity";
 import { BACKGROUNDS } from "./backgrounds";
+import { SPRITE_LIST, spriteShapes } from "./sprite";
 
-export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu";
+export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu" | "style2";
 export type AssetDef = {
   id: string; name: string; cat: Cat;
   layer: "back" | "ground";           // back = সূর্য/মেঘ/পাহাড় (গভীরতা-স্কেল নেই)
@@ -16,7 +17,7 @@ export type AssetDef = {
   shadow: number;                      // ছায়ার প্রস্থ (0 = নেই)
   side: boolean;                       // পাশ-মুখী (চলার দিকে ঘুরবে)
   talk: boolean;
-  rig?: "human";                       // মানুষের হাড়-রিগ (সব অ্যানিমেশন/ভিউ/লিপ-সিঙ্ক)
+  rig?: "human" | "sprite";                       // মানুষের হাড়-রিগ (সব অ্যানিমেশন/ভিউ/লিপ-সিঙ্ক)
   bounds: [number, number, number, number];
   build: (p: Pose) => Shape[];
 };
@@ -42,6 +43,10 @@ const deity = (id: string, name: string, scale: number): AssetDef => ({
 });
 const vahanaQ = (id: string, name: string, scale: number): AssetDef => ({ ...animal(id, name, scale), cat: "hindu" });
 const vahanaB = (id: string, name: string, scale: number, def: "fly" | "stand" = "stand"): AssetDef => ({ ...bird(id, name, scale), cat: "hindu", defaultAction: def, defaultY: def === "fly" ? 300 : 600, shadow: def === "fly" ? 0 : 60 });
+const sprite = (d: (typeof SPRITE_LIST)[number]): AssetDef => ({
+  id: "n_" + d.id, name: d.name, cat: "style2", layer: "ground", scale: 1, defaultY: 600, actions: d.actions, defaultAction: "stand", shadow: 55, side: false, talk: true, rig: "sprite",
+  bounds: [-110, -d.ground * d.k - 10, 110, 8], build: (p) => spriteShapes(d.id, p),
+});
 const prop = (id: string, name: string, cat: Cat, b: [number, number, number, number], build: (p: Pose) => Shape[], o: Partial<AssetDef> = {}): AssetDef => ({
   id, name, cat, layer: "ground", scale: 1, defaultY: 600, actions: ["stand"], defaultAction: "stand", shadow: 0, side: false, talk: false, bounds: b, build, ...o,
 });
@@ -65,6 +70,8 @@ export const ASSETS: AssetDef[] = [
   ...DEITY_LIST.map((d) => deity(d.id, d.name, d.scale)),
   vahanaQ("lion", "সিংহ (দুর্গার বাহন)", 1), vahanaQ("mouse", "ইঁদুর (গণেশের বাহন)", 1.4), vahanaQ("bull", "নন্দী (শিবের বাহন)", 0.95),
   vahanaB("owl", "পেঁচা (লক্ষ্মীর বাহন)", 1.2), vahanaB("peacock", "ময়ূর (কার্তিকের বাহন)", 1.2), vahanaB("swan", "রাজহংস (সরস্বতীর বাহন)", 1.2), vahanaB("garuda", "গরুড় (বিষ্ণুর বাহন)", 1.1, "fly"),
+  // নতুন স্টাইল (ছবি-ভিত্তিক প্রিমিয়াম চরিত্র) — আগের চরিত্র অক্ষত
+  ...SPRITE_LIST.map(sprite),
   // বস্তু
   prop("car", "গাড়ি", "object", [-120, -125, 125, 8], P.car, { actions: ["stand", "walk"], shadow: 110, side: true, scale: 1 }),
   prop("bus", "বাস", "object", [-155, -135, 155, 8], P.bus, { actions: ["stand", "walk"], shadow: 150, side: true, scale: 0.95 }),
@@ -90,5 +97,5 @@ export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? BAC
 export const TOTAL_ASSETS = ASSETS.length + BACKGROUNDS.length;
 export const CATS: { id: Cat; name: string }[] = [
   { id: "bg", name: "ব্যাকগ্রাউন্ড" }, { id: "human", name: "মানুষ" }, { id: "animal", name: "প্রাণী" },
-  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" },
+  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" }, { id: "style2", name: "নতুন স্টাইল" },
 ];
