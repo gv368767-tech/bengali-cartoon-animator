@@ -1,0 +1,15 @@
+{
+  "name": "bengali-cartoon-studio-windows",
+  "version": "2.3.0",
+  "description": "Bengali Cartoon Studio — Windows 10 (অফলাইন)",
+  "main": "main.js",
+  "author": "Bengali Cartoon Studio",
+  "scripts": { "build": "node build.mjs", "start": "node build.mjs && electron .", "test": "node build.mjs && node smoke.mjs", "dist": "node build.mjs && electron-builder --win nsis portable --x64 --publish never --config.directories.output=release" },
+  "devDependencies": { "electron": "31.7.7", "electron-builder": "24.13.3", "esbuild": "0.23.1", "playwright": "1.47.2" },
+  "build": {
+    "appId": "com.bengalicartoon.studio.windows", "productName": "Bengali Cartoon Studio",
+    "files": ["main.js", "preload.js", "index.html", "dist/**/*"],
+    "win": { "target": ["nsis", "portable"], "artifactName": "BengaliCartoonStudio-${version}-${target}.${ext}" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

@@ -3,3 +3,8 @@ node_modules/
 /ios/
 .expo/
 .env
+
+windows/node_modules/
+windows/dist/
+windows/release/
+windows/smoke.png

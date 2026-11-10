@@ -1,0 +1,18 @@
+<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'unsafe-inline'; media-src blob:; connect-src 'none'"><title>Bengali Cartoon Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#15171c;color:#eee;font:14px "Nirmala UI","Segoe UI",sans-serif;display:grid;grid-template-columns:300px 1fr 260px;grid-template-rows:auto 1fr auto;height:100vh}
+header{grid-column:1/4;display:flex;gap:8px;align-items:center;padding:8px 12px;background:#20232b}header b{color:#FDD620;font-size:16px;margin-right:12px}
+button,select,input{font:inherit;background:#2b2f3a;color:#eee;border:1px solid #444;border-radius:6px;padding:6px 10px}button{cursor:pointer}button:hover{background:#3a3f4d}button.pri{background:#FDD620;color:#111;font-weight:700;border:0}
+#lib{overflow:auto;padding:8px;border-right:1px solid #333}#tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}#tabs button.on{background:#FDD620;color:#111}
+#grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.c{background:#20232b;border-radius:8px;padding:4px;text-align:center;cursor:pointer;font-size:11px}.c:hover{outline:2px solid #FDD620}
+main{display:flex;flex-direction:column;align-items:center;padding:10px;gap:8px;overflow:auto}#stage{width:100%;max-width:1000px;aspect-ratio:16/9;background:#000;border-radius:8px}
+#bar{display:flex;gap:8px;align-items:center;width:100%;max-width:1000px}#bar input[type=range]{flex:1}
+#insp{padding:10px;border-left:1px solid #333;overflow:auto;display:flex;flex-direction:column;gap:8px}#insp label{font-size:12px;color:#aaa;display:block}#insp select,#insp input{width:100%}
+footer{grid-column:1/4;display:flex;gap:6px;align-items:center;padding:8px 12px;background:#20232b;overflow:auto}footer button.on{background:#FDD620;color:#111}#msg{margin-left:auto;color:#9fd}
+</style></head><body>
+<header><b>🎬 Bengali Cartoon Studio — Windows</b><button id="new">নতুন</button><button id="open">খুলুন (.bcsproj)</button><button id="save">সেভ (.bcsproj)</button><button id="exp" class="pri">ভিডিও এক্সপোর্ট</button><span id="msg"></span></header>
+<div id="lib"><div id="tabs"></div><div id="grid"></div></div>
+<main><canvas id="stage" width="1280" height="720"></canvas><div id="bar"><button id="play" class="pri">▶</button><input id="tl" type="range" min="0" max="1000" value="0"><span id="tt">0.0 / 0.0</span></div></main>
+<div id="insp"><div id="sel">একটি চরিত্র বা বস্তু যোগ করে স্টেজে ক্লিক করুন</div></div>
+<footer><span>দৃশ্য:</span><span id="scenes"></span><button id="addsc">+ দৃশ্য</button><label>পটভূমি <select id="bg"></select></label><label>সময় <input id="dur" type="number" min="2" max="60" style="width:70px"></label></footer>
+<script src="dist/app.js"></script></body></html>

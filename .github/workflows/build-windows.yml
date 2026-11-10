@@ -1,0 +1,27 @@
+name: Build Windows 10 App
+on:
+  push: { branches: [main], paths: ["windows/**", "src/**", "assets/sprites/**", ".github/workflows/build-windows.yml"] }
+  workflow_dispatch:
+permissions: { contents: write }
+jobs:
+  win:
+    runs-on: windows-latest
+    defaults: { run: { working-directory: windows, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install chromium
+      - name: Test (UI draws every character × every animation, no errors)
+        run: npm test
+      - name: Privacy gate - no network code in the desktop app
+        run: |
+          ! grep -nE "fetch\(|XMLHttpRequest|WebSocket|https?://[a-z]" main.js preload.js src/app.ts || (echo "network code found"; exit 1)
+      - run: npm run dist
+      - uses: actions/upload-artifact@v4
+        with: { name: BengaliCartoonStudio-Windows, path: "windows/release/*.exe" }
+      - name: Publish to Releases
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release create "win-${{ github.run_number }}" release/*.exe --title "Windows 10 #${{ github.run_number }}" --notes "Bengali Cartoon Studio — Windows 10 (offline). Unsigned: SmartScreen may warn — More info > Run anyway." --repo "${{ github.repository }}"
