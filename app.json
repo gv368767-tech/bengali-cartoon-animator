@@ -14,7 +14,7 @@
     ],
     "android": {
       "package": "com.bengalicartoon.animator",
-      "versionCode": 12,
+      "versionCode": 13,
       "backgroundColor": "#15171c",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

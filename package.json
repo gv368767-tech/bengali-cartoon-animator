@@ -6,7 +6,7 @@
     "start": "expo start",
     "android": "expo start --android",
     "typecheck": "tsc --noEmit",
-    "test": "tsx tests/scene.test.ts"
+    "test": "tsx tests/scene.test.ts && tsx tests/project.test.ts"
   },
   "dependencies": {
     "@shopify/react-native-skia": "1.2.3",
