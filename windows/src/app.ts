@@ -13,6 +13,9 @@ let libT: any = 0;
 const imgs = new Map<string, HTMLImageElement>();
 const atlas = (k: string) => { let i = imgs.get(k); if (!i) { i = new Image(); i.onload = () => { draw(); clearTimeout(libT); libT = setTimeout(() => lib(), 150); }; i.src = `dist/sprites/${k}.webp`; imgs.set(k, i); } return i.complete && i.naturalWidth ? i : null; };
 
+const P2 = new Map<string, Path2D>();
+const bgCache = new Map<string, HTMLCanvasElement>();
+function bgCanvas(id: string) { let c = bgCache.get(id); if (!c) { c = document.createElement("canvas"); c.width = 1280; c.height = 720; drawShapes(c.getContext("2d")!, (BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0]).shapes); bgCache.set(id, c); } return c; }
 export function drawShapes(c: CanvasRenderingContext2D, shapes: Shape[]) {
   for (const s of shapes) {
     c.globalAlpha = (s as any).op ?? 1;
@@ -21,7 +24,7 @@ export function drawShapes(c: CanvasRenderingContext2D, shapes: Shape[]) {
       case "circle": c.beginPath(); c.arc(s.x, s.y, s.r, 0, 6.2832); if (s.fill) { c.fillStyle = s.fill; c.fill(); } if (s.stroke) { c.strokeStyle = s.stroke; c.lineWidth = s.sw ?? 2; c.stroke(); } break;
       case "ellipse": c.fillStyle = s.fill; c.beginPath(); c.ellipse(s.x, s.y, s.rx, s.ry, 0, 0, 6.2832); c.fill(); break;
       case "line": c.strokeStyle = s.color; c.lineWidth = s.w; c.lineCap = "round"; c.beginPath(); c.moveTo(s.x1, s.y1); c.lineTo(s.x2, s.y2); c.stroke(); break;
-      case "path": { const p = new Path2D(s.d); if (s.fill) { c.fillStyle = s.fill; c.fill(p); } if (s.stroke) { c.strokeStyle = s.stroke; c.lineWidth = s.sw ?? 3; c.lineCap = "round"; c.lineJoin = "round"; c.stroke(p); } break; }
+      case "path": { let p = P2.get(s.d); if (!p) { p = new Path2D(s.d); P2.set(s.d, p); } if (s.fill) { c.fillStyle = s.fill; c.fill(p); } if (s.stroke) { c.strokeStyle = s.stroke; c.lineWidth = s.sw ?? 3; c.lineCap = "round"; c.lineJoin = "round"; c.stroke(p); } break; }
       case "poly": c.fillStyle = s.fill; c.beginPath(); for (let i = 0; i < s.pts.length; i += 2) i ? c.lineTo(s.pts[i], s.pts[i + 1]) : c.moveTo(s.pts[i], s.pts[i + 1]); c.closePath(); c.fill(); break;
       case "grad": { const g = c.createLinearGradient(0, s.y, 0, s.y + s.h); g.addColorStop(0, s.c1); g.addColorStop(1, s.c2); c.fillStyle = g; c.fillRect(s.x, s.y, s.w, s.h); break; }
       case "img": { const im = atlas(s.k); if (!im) break; c.save(); c.translate(s.e, s.f); c.rotate((s.r * Math.PI) / 180); c.scale(s.s, s.s); c.beginPath(); c.rect(s.x, s.y, s.w, s.h); c.clip(); c.drawImage(im, s.u, s.v, s.pw, s.ph, s.x, s.y, s.w, s.h); c.restore(); break; }
@@ -36,7 +39,7 @@ const msg = (m: string) => { $("msg").textContent = m; };
 
 function renderAt(c: CanvasRenderingContext2D, sc: S.Scene, lt: number, sel?: string | null) {
   c.clearRect(0, 0, 1280, 720);
-  drawShapes(c, (BACKGROUNDS.find((b) => b.id === sc.bg) ?? BACKGROUNDS[0]).shapes);
+  c.drawImage(bgCanvas(sc.bg), 0, 0);
   for (const it of sceneItems(movie, sc, lt)) {
     c.save(); c.translate(it.x, it.y); c.rotate((it.rot * Math.PI) / 180); c.scale(it.sx, it.sy);
     if (it.shadow > 0) { c.globalAlpha = 0.22; c.fillStyle = "#000"; c.beginPath(); c.ellipse(0, 0, it.shadow, it.shadow * 0.18, 0, 0, 6.2832); c.fill(); c.globalAlpha = 1; }
