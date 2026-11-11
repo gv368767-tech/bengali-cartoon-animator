@@ -1,7 +1,7 @@
 import React, { memo, useEffect, useMemo, useState } from "react";
 import { Canvas, Circle, Group, LinearGradient, Oval, Path, Rect, RoundedRect, Line, vec } from "@shopify/react-native-skia";
 import type { Shape } from "../art/shapes";
-import { Image as SkImg } from "@shopify/react-native-skia";
+import { Atlas, Image as SkImg, Skia } from "@shopify/react-native-skia";
 import { atlasImage, onSpriteLoaded } from "../art/spriteImages";
 import { BACKGROUNDS } from "../art/backgrounds";
 import { AssetDef } from "../art/registry";
@@ -44,7 +44,20 @@ function node(s: Shape, k: string): React.ReactNode {
 export const Shapes = ({ shapes, p = "s" }: { shapes: Shape[]; p?: string }) => {
   const [, bump] = useState(0);
   useEffect(() => onSpriteLoaded(() => bump((n) => n + 1)), []);
-  return <>{shapes.map((s, i) => node(s, p + i))}</>;
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < shapes.length; i++) {
+    const sh = shapes[i];
+    if (sh.t === "img") {
+      // একই অ্যাটলাসের পরপর অংশগুলো এক ড্র-কলে (দ্রুত) — ল্যাগ কমায়
+      const im = atlasImage(sh.k); let j = i; const sp: ReturnType<typeof Skia.XYWHRect>[] = [], tf: ReturnType<typeof Skia.RSXform>[] = [];
+      while (j < shapes.length) { const q = shapes[j]; if (q.t !== "img" || q.k !== sh.k) break;
+        const th = (q.r * Math.PI) / 180, c = Math.cos(th), sn = Math.sin(th), k = (q.w / q.pw) * q.s;
+        sp.push(Skia.XYWHRect(q.u, q.v, q.pw, q.ph)); tf.push(Skia.RSXform(k * c, k * sn, q.e + q.s * (c * q.x - sn * q.y), q.f + q.s * (sn * q.x + c * q.y))); j++; }
+      if (im) out.push(<Atlas key={p + "a" + i} image={im} sprites={sp} transforms={tf} />);
+      i = j - 1;
+    } else out.push(node(sh, p + i));
+  }
+  return <>{out}</>;
 };
 
 const Background = memo(({ id }: { id: string }) => {
