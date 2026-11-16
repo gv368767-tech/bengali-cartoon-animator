@@ -17,7 +17,7 @@ export type HumanAction =
 export type Action = "auto" | "stand" | "walk" | "run" | "jump" | "sit" | "dance" | "wave" | "fly" | HumanAction;
 // ঠোঁটের আকৃতি (লিপ-সিঙ্ক): A=হাঁ, E=চওড়া, O=গোল, U=ছোট গোল, M=বন্ধ, C=আধখোলা (ব্যঞ্জন)
 export type Mouth = { shape: "A" | "E" | "O" | "U" | "M" | "C"; open: number };
-export type Pose = { action: Exclude<Action, "auto">; phase: number; talk: number; blink: boolean; view?: View; mouth?: Mouth | null };
+export type Pose = { action: Exclude<Action, "auto">; phase: number; talk: number; blink: boolean; view?: View; mouth?: Mouth | null; mc?: Record<string, any> };
 
 export const R = (x: number, y: number, w: number, h: number, fill: string, r = 0, op?: number): Shape => ({ t: "rect", x, y, w, h, r, fill, op });
 export const C = (x: number, y: number, r: number, fill: string, op?: number): Shape => ({ t: "circle", x, y, r, fill, op });

@@ -22,7 +22,7 @@ type Eyes = "open" | "closed" | "happy" | "wide" | "up" | "down";
 type Rig = {
   L: Arm; R: Arm; lg: number; liftL: number; liftR: number; bob: number; sway: number; drop: number; jump: number;
   sh: number; hd: number; tilt: number; expr: Expr; eyes: Eyes; talk?: boolean;
-  armsFront?: boolean; headL?: boolean; headR?: boolean; noHold?: boolean; prop?: string;
+  lgA?: [number, number]; armsFront?: boolean; headL?: boolean; headR?: boolean; noHold?: boolean; prop?: string;
 };
 const idle = (k = 0): Arm => ({ a: [0.12 + k, 0.12 + k] });
 
@@ -288,7 +288,7 @@ function sleepShapes(d: HumanDef, p: Pose): Shape[] {
 export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   const view: View = p.view ?? "front";
   if (p.action === "sleep") return sleepShapes(d, p);
-  const ph = p.phase, rg = rigFor(p.action, ph);
+  const ph = p.phase, rg: Rig = p.mc ? { ...rigFor(p.action, ph), ...p.mc } : rigFor(p.action, ph); // p.mc: ভিডিও থেকে নেওয়া নড়াচড়া (ঐচ্ছিক) — না থাকলে আগের মতোই
   const { wk, mv } = VW[view];
   const sd = view === "side", bk = view === "back" || view === "q_back";
   const dx = rg.sway, dy = rg.bob + rg.drop + rg.jump;
@@ -324,7 +324,7 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   const upperCol = d.lower === "shorts" || d.lower === "pants" ? d.bottom : skin;
   const lowerCol = d.lower === "pants" ? d.bottom : skin;
   const legList = [-1, 1].map((sg) => {
-    const ang = sg * rg.lg, hxl = sd ? sg * 5 : sg * 15 * wk, lift = sg < 0 ? rg.liftL : rg.liftR;
+    const ang = rg.lgA ? rg.lgA[sg < 0 ? 0 : 1] : sg * rg.lg, hxl = sd ? sg * 5 : sg * 15 * wk, lift = sg < 0 ? rg.liftL : rg.liftR;
     if (p.action === "sit") { const sw = sin(ph * 1.3 + (sg > 0 ? PI : 0)) * 7; return { sg, hx: hxl, mx: hxl + sg * 6 * wk + (sd ? 18 : 0), my: -62, fx: hxl + sg * 8 * wk + (sd ? 44 : 0) + sw, fy: -10 - abs(sw) * 0.3 }; }
     return { sg, hx: hxl, mx: hxl + 0.5 * Ll * sin(ang), my: base + 0.5 * Ll * cos(ang) - lift * 0.5, fx: hxl + Ll * sin(ang), fy: base + Ll * cos(ang) - lift };
   });
