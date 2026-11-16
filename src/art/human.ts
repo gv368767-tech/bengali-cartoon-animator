@@ -237,6 +237,11 @@ function propShapes(name: string | undefined, x: PCtx): { back: Shape[]; mid: Sh
   const back: Shape[] = [], mid: Shape[] = [], front: Shape[] = [];
   const { ph, hL, hR, hx, hy, r, d } = x, s = sin(ph), c = cos(ph);
   switch (name) {
+    case "cloth": { // হাতে ধরা কাপড় (শাড়ির আঁচল) — ভিডিও-নড়াচড়ার জন্য ঐচ্ছিক
+      const cx = hR[0], cy = hR[1], col = d.top2 ?? d.top, w = sin(ph * 3) * 14, w2 = sin(ph * 3 + 1.3) * 18;
+      front.push(PA(`M ${f(cx)} ${f(cy - 6)} C ${f(cx + 30 + w)} ${f(cy - 30)} ${f(cx + 60 + w2)} ${f(cy + 10)} ${f(cx + 95 + w)} ${f(cy - 14 + w2 * 0.4)} L ${f(cx + 92 + w)} ${f(cy + 30)} C ${f(cx + 60 + w2)} ${f(cy + 36)} ${f(cx + 30 + w)} ${f(cy + 8)} ${f(cx)} ${f(cy + 8)} Z`, col, shade(col, 0.7), 2.5));
+      break;
+    }
     case "stool": back.push(R(-48, -64, 96, 13, "#a9773e", 5), R(-40, -52, 9, 52, "#8a5a2b"), R(31, -52, 9, 52, "#8a5a2b")); break;
     case "finger": { const dx = hR[0] - x.eR[0], dy = hR[1] - x.eR[1], n = Math.hypot(dx, dy) || 1; front.push(L(hR[0], hR[1], hR[0] + (dx / n) * 20, hR[1] + (dy / n) * 20, 7, d.skin)); break; }
     case "thumb": front.push(L(hR[0], hR[1] - 6, hR[0], hR[1] - 26, 8, d.skin), C(hR[0], hR[1] - 26, 4.5, d.skin)); break;
