@@ -27,22 +27,31 @@ for k in range(2):
     out=[]; legref={}
     for key,(h,a) in {"L":(23,27),"R":(24,28)}.items(): pass
     legL=np.percentile(np.linalg.norm(Wp[:,[23,24]]-Wp[:,[27,28]],axis=2),90); 
-    rec={k2:[] for k2 in ["aL0","aL1","aR0","aR1","gL","gR","lfL","lfR","sway","tilt","bob","x"]}
+    rec={k2:[] for k2 in ["aL0","aL1","aR0","aR1","gL","gR","lfL","lfR","sway","tilt","bob","x","ty","face","sw"]}
     for i in range(N):
         l,r=side(i,11,12); el,er=side(i,13,14); wl,wr=side(i,15,16); hl,hr=side(i,23,24); kl,kr=side(i,25,26); al,ar=side(i,27,28)
         rec["aL0"].append(ang(Wp[i,l],Wp[i,el],-1)); rec["aL1"].append(ang(Wp[i,el],Wp[i,wl],-1))
         rec["aR0"].append(ang(Wp[i,r],Wp[i,er],1));  rec["aR1"].append(ang(Wp[i,er],Wp[i,wr],1))
         for nm,hh,aa in (("L",hl,al),("R",hr,ar)):
-            v=Wp[i,aa]-Wp[i,hh]; rec["g"+nm].append(np.arctan2(v[0],v[1])); rec["lf"+nm].append(max(0,1-np.linalg.norm(v)/legL)*102)
+            v=Wp[i,aa]-Wp[i,hh]; rec["g"+nm].append(np.arctan2(v[0],v[1])); rec["lf"+nm].append(min(35,max(0,1-np.linalg.norm(v)/legL)*102))
         hp=hip[i]; shm=sh[i]
-        rec["sway"].append(np.clip((shm[0]-hp[0])/kscale,-25,25)); rec["x"].append(hp[0])
-        rec["bob"].append((hp[1]-np.median(hip[:,1]))/kscale)
-        rec["tilt"].append(np.clip((Wp[i,0,0]-shm[0])/kscale/40*0.6,-0.3,0.3))
+        rec["sway"].append(0.0); rec["x"].append(hp[0])
+        rec["bob"].append(0.0); rec["ty"].append(hp[1]-np.median(hip[:,1])); rec["sw"].append(abs(Wp[i,11,0]-Wp[i,12,0])/torso); rec["face"].append(float(np.mean(A[k,i,[0,2,5],3])))
+        rec["tilt"].append(np.clip((Wp[i,0,0]-shm[0])/kscale/40*0.6,-0.15,0.15))
     for kk in rec:
         v=np.array(rec[kk]);
         if kk in("aL0","aL1","aR0","aR1","gL","gR"): v=np.unwrap(v)
         rec[kk]=gaussian_filter1d(v,1.2,mode="nearest").tolist()
+    from scipy.ndimage import median_filter
+    face=gaussian_filter1d(np.nan_to_num(np.array(rec["face"]),nan=0.5),2); sw=gaussian_filter1d(np.array(rec["sw"]),2)
+    code=np.where(face<0.5,np.where(sw>0.55,3,2),np.where(sw>0.55,0,1)); code=median_filter(code,size=15,mode="nearest")
+    rec["view"]=[["front","q_front","q_back","back"][int(c)] for c in code]; print("views",{v:rec["view"].count(v) for v in set(rec["view"])})
     ground=float(np.median(np.maximum(Wp[:,27,1],Wp[:,28,1])))
     res[k]=dict(rec=rec,k=float(kscale),ground=ground,hipmed=float(np.median(hip[:,1])),legL=float(legL))
     print("person",k,"scale px/unit",round(kscale,2),"ground y",round(ground),"torso px",round(torso))
-json.dump({"fps":30,"W":W,"H":H,"p":res},open("mc.json","w"))
+def clean(o):
+    if isinstance(o,dict): return {k:clean(v) for k,v in o.items()}
+    if isinstance(o,list): return [clean(v) for v in o]
+    if isinstance(o,float) and o!=o: return 0.5
+    return o
+json.dump(clean({"fps":30,"W":W,"H":H,"p":res}),open("mc.json","w"),allow_nan=False)
