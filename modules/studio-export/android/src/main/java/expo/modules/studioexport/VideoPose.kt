@@ -138,7 +138,8 @@ object VideoPose {
         mbmp.eraseColor(Color.TRANSPARENT)
         for (k in 0 until persons.length()) {
           val p = persons.getJSONArray(k).optJSONArray(i) ?: continue
-          fun X(j: Int) = (p.getDouble(j * 3) * pw).toFloat(); fun Y(j: Int) = (p.getDouble(j * 3 + 1) * ph).toFloat()
+          fun X(j: Int) = (p.getDouble(j * 3) * pw).toFloat()
+          fun Y(j: Int) = (p.getDouble(j * 3 + 1) * ph).toFloat()
           val torso = hypot(((X(11) + X(12)) / 2 - (X(23) + X(24)) / 2).toDouble(), ((Y(11) + Y(12)) / 2 - (Y(23) + Y(24)) / 2).toDouble()).toFloat()
           val w = 0.62f * torso + 18f
           for ((a, b, ww) in listOf(Triple(11, 13, 0.7f), Triple(13, 15, 0.7f), Triple(12, 14, 0.7f), Triple(14, 16, 0.7f), Triple(23, 25, 1f), Triple(25, 27, 1f), Triple(24, 26, 1f), Triple(26, 28, 1f), Triple(11, 23, 1f), Triple(12, 24, 1f), Triple(11, 12, 1f), Triple(23, 24, 1f), Triple(0, 11, 0.7f), Triple(0, 12, 0.7f))) {
