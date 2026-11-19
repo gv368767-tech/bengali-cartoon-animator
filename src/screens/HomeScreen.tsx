@@ -12,7 +12,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { packProject, unpackProject } from "../lib/projectFile";
 import { uid } from "../lib/scene";
 
-export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: Movie) => void; onLibrary: () => void; onDemo: () => void }) {
+export default function HomeScreen({ onOpen, onLibrary, onDemo, onVideo }: { onOpen: (m: Movie) => void; onLibrary: () => void; onDemo: () => void; onVideo?: () => void }) {
   const [list, setList] = useState<Meta[]>([]);
   const [name, setName] = useState("");
   const refresh = useCallback(() => { listMovies().then(setList).catch(() => setList([])); }, []);
@@ -54,6 +54,7 @@ export default function HomeScreen({ onOpen, onLibrary, onDemo }: { onOpen: (m: 
       </View>
       <TouchableOpacity onPress={onLibrary} style={s.lib}><Text style={{ color: C.text, fontWeight: "700" }}>📚 অ্যাসেট লাইব্রেরি দেখুন ({TOTAL_ASSETS}টি)</Text></TouchableOpacity>
       <TouchableOpacity onPress={onDemo} style={[s.lib, { backgroundColor: "#1d3b37" }]}><Text style={{ color: C.text, fontWeight: "700" }}>🎭 অ্যানিমেশন ডেমো — ৩০টি অ্যানিমেশন চালিয়ে দেখুন</Text></TouchableOpacity>
+      {onVideo ? <TouchableOpacity onPress={onVideo} style={[s.lib, { backgroundColor: "#2d1d3b" }]}><Text style={{ color: C.text, fontWeight: "700" }}>🎥 ভিডিও থেকে কার্টুন (পরীক্ষামূলক)</Text></TouchableOpacity> : null}
       <TouchableOpacity onPress={story} disabled={busy} style={[s.lib, { backgroundColor: "#3b2d1d" }]}><Text style={{ color: C.text, fontWeight: "700" }}>{busy ? "⏳ গল্প তৈরি হচ্ছে…" : "📖 গল্প: টুকাই ও মিনি — হারানো সাইকেল (৫ দৃশ্য)"}</Text></TouchableOpacity>
       <TouchableOpacity onPress={importProj} style={[s.lib, { backgroundColor: "#1d2b3b" }]}><Text style={{ color: C.text, fontWeight: "700" }}>📥 প্রজেক্ট ইমপোর্ট (.bcsproj — Windows থেকেও)</Text></TouchableOpacity>
       <Text style={s.h2}>সেভ করা প্রজেক্ট</Text>

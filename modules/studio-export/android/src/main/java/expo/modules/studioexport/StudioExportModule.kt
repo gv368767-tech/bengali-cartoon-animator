@@ -63,6 +63,17 @@ class StudioExportModule : Module() {
       mapOf("path" to f.absolutePath, "durationMs" to (a?.first ?: 0L).toInt(), "envelope" to (a?.second?.map { (Math.round(it * 100f) / 100f).toDouble() } ?: emptyList<Double>()))
     }
 
+    // ভিডিও → মানুষের ভঙ্গি (অফলাইন MediaPipe), ফাঁক ভরা ও খালি পটভূমি
+    AsyncFunction("detectPoses") { path: String, fps: Int, maxFrames: Int ->
+      VideoPose.detect(context().applicationContext, path, fps.coerceIn(5, 30), maxFrames.coerceIn(1, 900)) { }
+    }
+    AsyncFunction("detectCrops") { path: String, fps: Int, requests: String ->
+      VideoPose.detectCrops(context().applicationContext, path, fps.coerceIn(5, 30), requests)
+    }
+    AsyncFunction("buildPlate") { path: String, fps: Int, tracks: String, outPath: String ->
+      VideoPose.plate(path, fps.coerceIn(5, 30), tracks, outPath)
+    }
+
     AsyncFunction("saveToGallery") { path: String, name: String ->
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw Exception("পুরোনো অ্যান্ড্রয়েডে 'শেয়ার' ব্যবহার করুন")
       val resolver = context().contentResolver
