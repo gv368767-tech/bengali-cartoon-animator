@@ -3,8 +3,7 @@ import { Canvas, Circle, Group, LinearGradient, Oval, Path, Rect, RoundedRect, L
 import type { Shape } from "../art/shapes";
 import { Atlas, Image as SkImg, Skia } from "@shopify/react-native-skia";
 import { atlasImage, onSpriteLoaded } from "../art/spriteImages";
-import { BACKGROUNDS } from "../art/backgrounds";
-import { AssetDef } from "../art/registry";
+import { AssetDef, getBg } from "../art/registry";
 import { Movie, Scene, STAGE_H, STAGE_W } from "../lib/scene";
 import { Item, buildAsset, polyD, sceneItems } from "../lib/render";
 
@@ -61,7 +60,7 @@ export const Shapes = ({ shapes, p = "s" }: { shapes: Shape[]; p?: string }) => 
 };
 
 const Background = memo(({ id }: { id: string }) => {
-  const bg = BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0];
+  const bg = getBg(id);
   return <Shapes shapes={bg.shapes} p="bg" />;
 });
 

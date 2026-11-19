@@ -1,3 +1,4 @@
+import { videoBgDef } from "./videoBg";
 import { Action, Pose, Shape } from "./shapes";
 import { HUMANS, humanShapes } from "./human";
 import { ANIMALS, quadShapes } from "./animal";
@@ -93,7 +94,7 @@ export const ASSETS: AssetDef[] = [
 
 export const BG_ASSETS = BACKGROUNDS;
 export const getAsset = (id: string) => ASSETS.find((a) => a.id === id);
-export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? BACKGROUNDS[0];
+export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? videoBgDef(id) ?? BACKGROUNDS[0];
 export const TOTAL_ASSETS = ASSETS.length + BACKGROUNDS.length;
 export const CATS: { id: Cat; name: string }[] = [
   { id: "bg", name: "ব্যাকগ্রাউন্ড" }, { id: "human", name: "মানুষ" }, { id: "animal", name: "প্রাণী" },

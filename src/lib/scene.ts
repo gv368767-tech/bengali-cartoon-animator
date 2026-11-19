@@ -1,4 +1,5 @@
 // খাঁটি (pure) দৃশ্য-মডেল — UI ছাড়া, তাই আলাদা টেস্ট করা যায়।
+import type { Mocap } from "./mocap";
 import { Action, Mouth, View } from "../art/shapes";
 import { mouthAt } from "./lipsync";
 import { levelAt, mouthFromLevel } from "./envelope";
@@ -11,7 +12,7 @@ export type Act = { t: number; action: Action };
 export type Look = Partial<Pick<HumanDef, "skin" | "hair" | "top" | "bottom">>;
 export type CastMember = { id: string; assetId: string; name: string; look?: Look };
 export type ViewKey = { t: number; view: View };
-export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[]; views?: ViewKey[] };
+export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[]; views?: ViewKey[]; mocap?: Mocap /* ভিডিও থেকে নেওয়া নড়াচড়া (ঐচ্ছিক) */ };
 // voiceUri: লেখা থেকে তৈরি (বা নিজের) ভয়েস ফাইল; থাকলে সেটাই বাজে, না থাকলে ফোনের ভয়েস বলে
 export type Dialogue = { id: string; objId: string; t: number; dur: number; text: string; voiceUri?: string };
 // অডিও ক্লিপ: sfx = সাউন্ড ইফেক্ট, voice = ভয়েসওভার (objId দিলে ওই চরিত্রের ঠোঁট আওয়াজ অনুযায়ী নড়ে)

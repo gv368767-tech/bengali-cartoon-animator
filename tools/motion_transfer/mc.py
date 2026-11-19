@@ -1,6 +1,6 @@
-import numpy as np, json
+import numpy as np, json, os
 from scipy.ndimage import gaussian_filter1d
-A=np.load("lm_filled.npy"); N=A.shape[1]; W,H=1080,1920
+A=np.load(os.environ.get("MC_IN","lm_filled.npy")); N=A.shape[1]; W,H=1080,1920
 def interp(x):  # x: (N,...) with NaN rows
     x=x.copy(); idx=np.arange(N)
     for c in np.ndindex(*x.shape[1:]):
@@ -54,4 +54,4 @@ def clean(o):
     if isinstance(o,list): return [clean(v) for v in o]
     if isinstance(o,float) and o!=o: return 0.5
     return o
-json.dump(clean({"fps":30,"W":W,"H":H,"p":res}),open("mc.json","w"),allow_nan=False)
+json.dump(clean({"fps":30,"W":W,"H":H,"p":res}),open(os.environ.get("MC_OUT","mc.json"),"w"),allow_nan=False)

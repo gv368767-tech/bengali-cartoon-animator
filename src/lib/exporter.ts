@@ -5,11 +5,11 @@ import StudioExport from "../../modules/studio-export";
 import { sceneItems } from "./render";
 import { Movie, activeScenes, dialogueAt, fadeAlpha, sceneStarts } from "./scene";
 import { R } from "../art/shapes";
-import { BACKGROUNDS } from "../art/backgrounds";
 import { TRACKS } from "./audio";
 import { ATLAS } from "../art/sprites/images";
 import { atlasKeysOf, spriteDef } from "../art/sprite";
-import { getAsset } from "../art/registry";
+import { getAsset, getBg } from "../art/registry";
+import { isVideoBg, videoBgKey, videoBgPath } from "../art/videoBg";
 
 export type Quality = 720 | 1080;
 export const exportAvailable = () => StudioExport != null;
@@ -52,9 +52,10 @@ export async function exportMovie(movie: Movie, q: Quality, onProgress: (p: numb
     for (const sc of scenes) for (const o of sc.objects) { const a = getAsset(o.assetId); if (a?.rig === "sprite") atlasKeysOf(a.id.replace(/^n_/, "")).forEach((k) => used.add(k)); }
     const paths: Record<string, string> = {};
     for (const k of used) { const a = Asset.fromModule(ATLAS[k]); await a.downloadAsync(); paths[k] = (a.localUri ?? a.uri).replace("file://", ""); }
-    if (used.size) await StudioExport.setAtlases(JSON.stringify(paths));
+    for (const id of new Set(scenes.map((s) => s.bg))) if (isVideoBg(id)) paths[videoBgKey(id)] = videoBgPath(id).replace("file://", "");
+    if (Object.keys(paths).length) await StudioExport.setAtlases(JSON.stringify(paths));
     for (const id of new Set(scenes.map((s) => s.bg))) {
-      const bg = BACKGROUNDS.find((b) => b.id === id)!;
+      const bg = getBg(id);
       await StudioExport.setBackground(id, JSON.stringify(bg.shapes));
     }
     const starts = plan.map((p) => p.start);
