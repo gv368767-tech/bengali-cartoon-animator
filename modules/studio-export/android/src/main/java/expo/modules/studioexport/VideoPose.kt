@@ -30,7 +30,7 @@ object VideoPose {
   private const val DET_W = 540
 
   private fun open(path: String): MediaMetadataRetriever {
-    val r = MediaMetadataRetriever(); r.setDataSource(path.removePrefix("file://")); return r
+    val r = MediaMetadataRetriever(); r.setDataSource(VideoDecoder.cleanPath(path)); return r
   }
   private fun frameAt(r: MediaMetadataRetriever, ms: Long, w: Int): Bitmap? {
     val b = r.getFrameAtTime(ms * 1000, MediaMetadataRetriever.OPTION_CLOSEST) ?: return null
@@ -56,44 +56,65 @@ object VideoPose {
     return a
   }
 
-  /** সব ফ্রেমে (fps হারে) সব মানুষের ভঙ্গি। ফল: {w,h,fps,n,frames:[[pose,...],...]} */
-  fun detect(ctx: Context, path: String, fps: Int, maxFrames: Int, progress: (Double) -> Unit): String {
-    val r = open(path)
+  /**
+   * সব ফ্রেমে (fps হারে) সব মানুষের ভঙ্গি। ফল: {w,h,fps,n,frames:[[pose,...],...]}
+   * হার্ডওয়্যার ডিকোডারে ক্রমানুসারে ফ্রেম পড়ে (দ্রুত) এবং প্রতি ফ্রেমের পরে সত্যিকারের অগ্রগতি জানায়।
+   */
+  fun detect(ctx: Context, path: String, fps: Int, maxFrames: Int, progress: (Double, String) -> Unit, cancelled: () -> Boolean): String {
+    progress(0.0, "ভিডিও ফাইল খোলা হচ্ছে…")
+    val dec = VideoDecoder(ctx, path)
     try {
-      val durMs = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)!!.toLong()
-      val n = min(maxFrames, (durMs * fps / 1000).toInt())
-      val lm = landmarker(ctx, RunningMode.VIDEO, 4)
-      val frames = JSONArray(); var vw = 0; var vh = 0
+      val durS = max(0.1, dec.durationUs / 1e6)
+      val n = max(1, min(maxFrames, (durS * fps).toInt()))
+      val upright = dec.rotation == 90 || dec.rotation == 270
+      val sw = if (upright) dec.height else dec.width; val sh = if (upright) dec.width else dec.height
+      val dw = DET_W; val dh = max(2, (DET_W.toFloat() * sh / sw).roundToInt())
+      val rw = if (upright) dh else dw; val rh = if (upright) dw else dh      // ডিকোড-করা (ঘোরানো-আগের) মাপ
+      progress(0.0, "মডেল লোড হচ্ছে (অফলাইন)…")
+      val lm = try { landmarker(ctx, RunningMode.VIDEO, 4) } catch (e: Throwable) { throw Exception("অফলাইন পোজ মডেল লোড হয়নি: ${e.message}") }
+      val frames = Array(n) { JSONArray() }
       try {
-        for (i in 0 until n) {
-          val ms = i * 1000L / fps
-          val bmp = frameAt(r, ms, DET_W)
+        val pix = IntArray(rw * rh); var next = 0; var base = -1L; var lastMs = -1L; var last = JSONArray(); var seen = 0
+        val step = 1_000_000.0 / fps; var t0 = System.currentTimeMillis()
+        progress(0.01, "ফ্রেম পড়া ও ভঙ্গি খোঁজা শুরু…")
+        dec.run(cancelled) { img, pts ->
+          if (base < 0) base = pts
+          val rel = pts - base; seen++
+          if (rel + step / 2 < next * step) return@run true
+          VideoDecoder.toArgb(img, rw, rh, pix)
+          var bmp = Bitmap.createBitmap(pix, rw, rh, Bitmap.Config.ARGB_8888)
+          if (dec.rotation != 0) { val m = android.graphics.Matrix(); m.postRotate(dec.rotation.toFloat()); bmp = Bitmap.createBitmap(bmp, 0, 0, rw, rh, m, true) }
+          var ms = rel / 1000; if (ms <= lastMs) ms = lastMs + 1; lastMs = ms
           val fa = JSONArray()
-          if (bmp != null) {
-            vw = bmp.width; vh = bmp.height
-            val res = lm.detectForVideo(BitmapImageBuilder(bmp).build(), ms)
-            for (pose in res.landmarks()) fa.put(poseJson(pose) { x, y -> Pair(x.toDouble(), y.toDouble()) })
-          }
-          frames.put(fa)
-          if (i % 5 == 0) progress(i.toDouble() / n)
+          val res = lm.detectForVideo(BitmapImageBuilder(bmp).build(), ms)
+          for (pose in res.landmarks()) fa.put(poseJson(pose) { x, y -> Pair(x.toDouble(), y.toDouble()) })
+          last = fa
+          // একই ফ্রেম একাধিক স্লটে পড়লে (ভিডিও কম-fps) একই ফল
+          while (next < n && rel + step / 2 >= next * step) { frames[next++] = fa }
+          val el = (System.currentTimeMillis() - t0) / 1000.0
+          val frac = next.toDouble() / n
+          val eta = if (frac > 0.03) (el / frac - el).roundToInt() else -1
+          progress(0.01 + 0.98 * frac, "ভঙ্গি খোঁজা: $next/$n ফ্রেম" + (if (eta >= 0) " · বাকি প্রায় ${eta}সে" else ""))
+          next < n
         }
+        if (seen == 0) throw Exception("ভিডিও থেকে একটিও ফ্রেম পড়া যায়নি")
+        while (next < n) frames[next++] = JSONArray()
       } finally { lm.close() }
-      val fullW = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)!!.toInt()
-      val fullH = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)!!.toInt()
-      val rot = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-      val sw = if (rot == 90 || rot == 270) fullH else fullW; val sh = if (rot == 90 || rot == 270) fullW else fullH
-      return JSONObject().put("w", sw).put("h", sh).put("fps", fps).put("n", n).put("frames", frames).toString()
-    } finally { r.release() }
+      progress(1.0, "ভঙ্গি খোঁজা শেষ")
+      val arr = JSONArray(); for (f in frames) arr.put(f)
+      return JSONObject().put("w", sw).put("h", sh).put("fps", fps).put("n", n).put("frames", arr).toString()
+    } finally { dec.close() }
   }
 
   /** ধরা না-পড়া ফ্রেমের জন্য: ওই ব্যক্তির এলাকা কেটে আলাদাভাবে খোঁজা। requests: [{person,frame,box:[x0,y0,x1,y1]}] */
-  fun detectCrops(ctx: Context, path: String, fps: Int, requests: String): String {
+  fun detectCrops(ctx: Context, path: String, fps: Int, requests: String, progress: (Double, String) -> Unit = { _, _ -> }): String {
     val reqs = JSONArray(requests); val out = JSONArray()
     val r = open(path)
     try {
       val lm = landmarker(ctx, RunningMode.IMAGE, 1)
       try {
         for (q in 0 until reqs.length()) {
+          progress(q.toDouble() / reqs.length(), "ফাঁক ভরা: ${q + 1}/${reqs.length()}")
           val o = reqs.getJSONObject(q); val b = o.getJSONArray("box")
           val x0 = b.getDouble(0); val y0 = b.getDouble(1); val x1 = b.getDouble(2); val y1 = b.getDouble(3)
           val full = frameAt(r, o.getInt("frame") * 1000L / fps, 720) ?: continue
@@ -117,7 +138,7 @@ object VideoPose {
    * কোথাও মানুষ সবসময় ছিল (ফাঁক) — আশপাশের রং ছড়িয়ে ভরা (সাধারণ ক্লাসিক পদ্ধতি, AI নয়)। ক্যামেরা নড়লে এটা কাজ করে না।
    * tracks: {persons:[[pose|null,...],...]} (বাকি ফ্রেমগুলোর ভঙ্গি, mocap.ts থেকে)। ফল: JPEG ফাইল, উচ্চতা ৭২০।
    */
-  fun plate(path: String, fps: Int, tracks: String, outPath: String): String {
+  fun plate(path: String, fps: Int, tracks: String, outPath: String, progress: (Double, String) -> Unit = { _, _ -> }): String {
     val persons = JSONObject(tracks).getJSONArray("persons"); val n = persons.getJSONArray(0).length()
     val r = open(path)
     try {
@@ -133,6 +154,7 @@ object VideoPose {
       val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.FILL }
       val pix = IntArray(px)
       for ((si, i) in idx.withIndex()) {
+        progress(si.toDouble() / idx.size * 0.9, "পটভূমি: ফ্রেম ${si + 1}/${idx.size}")
         val raw = frameAt(r, i * 1000L / fps, pw) ?: continue
         val f = Bitmap.createScaledBitmap(raw, pw, ph, true); f.getPixels(pix, 0, pw, 0, 0, pw, ph)
         mbmp.eraseColor(Color.TRANSPARENT)

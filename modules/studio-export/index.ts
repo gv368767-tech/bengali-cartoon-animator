@@ -1,5 +1,6 @@
 import { requireNativeModule } from "expo";
 
+export type NativeProgress = { task: string; p: number; msg: string };
 export type StudioExportNative = {
   begin(config: string): Promise<string>;
   setBackground(key: string, shapesJson: string): Promise<void>;
@@ -11,6 +12,9 @@ export type StudioExportNative = {
   detectPoses(path: string, fps: number, maxFrames: number): Promise<string>;
   detectCrops(path: string, fps: number, requests: string): Promise<string>;
   buildPlate(path: string, fps: number, tracks: string, outPath: string): Promise<string>;
+  cartoonizeVideo(path: string, outPath: string, opts: string): Promise<string>;
+  cancelNative(): Promise<void>;
+  addListener?(name: "onNativeProgress", cb: (e: NativeProgress) => void): { remove(): void };
   analyzeAudio(path: string, fps: number): Promise<{ durationMs: number; envelope: number[] }>;
   synthesizeVoice(text: string, outPath: string, rate: number, pitch: number): Promise<{ path: string; durationMs: number; envelope: number[] }>;
 };
