@@ -64,15 +64,27 @@ class StudioExportModule : Module() {
     }
 
     // ভিডিও → মানুষের ভঙ্গি (অফলাইন MediaPipe), ফাঁক ভরা ও খালি পটভূমি
-    AsyncFunction("detectPoses") { path: String, fps: Int, maxFrames: Int ->
-      VideoPose.detect(context().applicationContext, path, fps.coerceIn(5, 30), maxFrames.coerceIn(1, 900)) { }
+    AsyncFunction("detectOpen") { path: String, fps: Int, maxFrames: Int ->
+      VideoPose.detectOpen(context().applicationContext, path, fps.coerceIn(5, 30), maxFrames.coerceIn(1, 1800))
     }
+    AsyncFunction("detectNext") { start: Int, count: Int -> VideoPose.detectNext(start, count.coerceIn(1, 60)) }
+    AsyncFunction("detectClose") { -> VideoPose.detectClose(); null }
     AsyncFunction("detectCrops") { path: String, fps: Int, requests: String ->
-      VideoPose.detectCrops(context().applicationContext, path, fps.coerceIn(5, 30), requests)
+      try { VideoPose.detectCrops(context().applicationContext, path, fps.coerceIn(5, 30), requests) }
+      catch (e: Throwable) { throw if (e is Exception) e else Exception(e.javaClass.simpleName + ": " + e.message) }
     }
-    AsyncFunction("buildPlate") { path: String, fps: Int, tracks: String, outPath: String ->
-      VideoPose.plate(path, fps.coerceIn(5, 30), tracks, outPath)
+    AsyncFunction("plateBegin") { path: String, fps: Int, tracks: String -> VideoPose.plateBegin(path, fps.coerceIn(5, 30), tracks) }
+    AsyncFunction("plateStep") { count: Int -> VideoPose.plateStep(count.coerceIn(1, 20)) }
+    AsyncFunction("plateFinish") { outPath: String -> VideoPose.plateFinish(outPath) }
+    AsyncFunction("plateClose") { -> VideoPose.plateClose(); null }
+
+    // সম্পূর্ণ ভিডিও কার্টুন: প্রতিটি ফ্রেম কার্টুন রূপে (ক্লাসিক ইমেজ প্রসেসিং)
+    AsyncFunction("cartoonProbe") { path: String -> Cartoonizer.probe(path) }
+    AsyncFunction("cartoonFrames") { path: String, start: Int, count: Int, fps: Int, levels: Int ->
+      val s = session ?: throw Exception("এক্সপোর্ট শুরু হয়নি")
+      Cartoonizer.frames(path, s, start, count.coerceIn(1, 30), fps.coerceIn(5, 30), levels).toInt()
     }
+    AsyncFunction("cartoonReset") { -> Cartoonizer.reset(); null }
 
     AsyncFunction("saveToGallery") { path: String, name: String ->
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) throw Exception("পুরোনো অ্যান্ড্রয়েডে 'শেয়ার' ব্যবহার করুন")

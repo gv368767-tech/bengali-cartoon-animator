@@ -63,6 +63,12 @@ class ExportSession(private val cfg: JSONObject, private val ctx: Context) {
     return warnings.joinToString(",") + (if (audio == null) ",no_audio" else "")
   }
 
+  val width: Int get() = w
+  val height: Int get() = h
+
+  /** তৈরি ছবি (w×h) সরাসরি একটি ফ্রেম হিসেবে এনকোড */
+  fun drawBitmap(b: Bitmap) { canvas.drawBitmap(b, 0f, 0f, null); encodeCurrent() }
+
   fun setBackground(key: String, shapes: JSONArray) {
     val bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = Canvas(bm)
