@@ -12,6 +12,8 @@ export type StudioExportNative = {
   detectNext(start: number, count: number): Promise<string>;
   detectClose(): Promise<null>;
   detectCrops(path: string, fps: number, requests: string): Promise<string>;
+  profile(path: string, fps: number, tracks: string): Promise<string>;
+  cartoonImage(inPath: string, outPath: string, levels: number): Promise<string>;
   plateBegin(path: string, fps: number, tracks: string): Promise<string>;
   plateStep(count: number): Promise<number>;
   plateFinish(outPath: string): Promise<string>;

@@ -167,3 +167,35 @@ export function mocapMouth(level: number, t: number): { shape: "A" | "E" | "O" |
   if (level < 0.12) return { shape: "M", open: 0 };
   return { shape: SHAPES[Math.floor(t / 0.12) % 6], open: Math.min(1, level * 1.5) };
 }
+
+// ---------- দুজনকে আলাদা রাখা (বহু-অংশ শনাক্তকরণের ফল থেকে) ----------
+// frames[i] = ওই ফ্রেমে পাওয়া সব "ঠিক" ভঙ্গি (বাঁ-ডান নিয়মহীন)। ফল: [বাঁ জনের ট্র্যাক, ডান জনের ট্র্যাক]।
+// নিয়ম: দুজন একই জায়গায় চাপবে না; আগের ফ্রেমের কাছের জনকে একই মানুষ ধরা; এক জন পাওয়া গেলে কাছের "স্লটে" বসে।
+const hipC = (p: Pose33) => [(p[69] + p[72]) / 2, (p[70] + p[73]) / 2];
+const poseScore = (p: Pose33) => [0, 11, 12, 23, 24, 25, 26, 27, 28].reduce((a, j) => a + p[j * 3 + 2], 0) / 9;
+export function assignSlots(frames: Pose33[][], aspect = 1.78): [Track, Track] {
+  const N = frames.length; const tr: [Track, Track] = [new Array(N).fill(null), new Array(N).fill(null)];
+  const last: (Pose33 | null)[] = [null, null];
+  const dist = (a: Pose33, b: Pose33) => { const x = hipC(a), y = hipC(b); return Math.hypot(x[0] - y[0], (x[1] - y[1]) * aspect); };
+  for (let i = 0; i < N; i++) {
+    // একই মানুষের পুনরাবৃত্তি বাদ (সবচেয়ে ভালো স্কোর রেখে)
+    const keep: Pose33[] = [];
+    for (const p of [...frames[i]].sort((a, b) => poseScore(b) - poseScore(a))) if (keep.every((q) => dist(p, q) > 0.12)) keep.push(p);
+    const c = keep.slice(0, 3).sort((a, b) => hipC(a)[0] - hipC(b)[0]);
+    if (c.length >= 2) {
+      let best: { cost: number; a: Pose33; b: Pose33 } | null = null;
+      for (let a = 0; a < c.length; a++) for (let b = a + 1; b < c.length; b++) {
+        let cost = -(poseScore(c[a]) + poseScore(c[b]));
+        for (const [s, p] of [[0, c[a]], [1, c[b]]] as const) { const l = last[s]; if (l) cost += 3 * Math.hypot(hipC(p)[0] - hipC(l)[0], hipC(p)[1] - hipC(l)[1]); }
+        if (!best || cost < best.cost) best = { cost, a: c[a], b: c[b] };
+      }
+      tr[0][i] = best!.a; tr[1][i] = best!.b;
+    } else if (c.length === 1) {
+      const p = c[0]; const d = [0, 1].map((s) => (last[s] ? Math.hypot(hipC(p)[0] - hipC(last[s]!)[0], hipC(p)[1] - hipC(last[s]!)[1]) : 9));
+      const s = Math.min(d[0], d[1]) < 9 ? (d[0] <= d[1] ? 0 : 1) : hipC(p)[0] < 0.5 ? 0 : 1;
+      tr[s][i] = p;
+    }
+    for (const s of [0, 1]) if (tr[s][i]) last[s] = tr[s][i];
+  }
+  return tr;
+}

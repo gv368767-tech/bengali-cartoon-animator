@@ -73,6 +73,8 @@ class StudioExportModule : Module() {
       try { VideoPose.detectCrops(context().applicationContext, path, fps.coerceIn(5, 30), requests) }
       catch (e: Throwable) { throw if (e is Exception) e else Exception(e.javaClass.simpleName + ": " + e.message) }
     }
+    AsyncFunction("profile") { path: String, fps: Int, tracks: String -> VideoPose.profile(path, fps.coerceIn(5, 30), tracks) }
+    AsyncFunction("cartoonImage") { inPath: String, outPath: String, levels: Int -> Cartoonizer.image(inPath, outPath, levels.coerceIn(3, 12)) }
     AsyncFunction("plateBegin") { path: String, fps: Int, tracks: String -> VideoPose.plateBegin(path, fps.coerceIn(5, 30), tracks) }
     AsyncFunction("plateStep") { count: Int -> VideoPose.plateStep(count.coerceIn(1, 20)) }
     AsyncFunction("plateFinish") { outPath: String -> VideoPose.plateFinish(outPath) }

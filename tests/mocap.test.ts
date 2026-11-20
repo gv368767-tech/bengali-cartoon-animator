@@ -75,3 +75,36 @@ import { videoBgDef, videoBgId } from "../src/art/videoBg";
   assert.equal(videoBgDef("vid_x_9x16")!.shapes.length, 2); assert.equal(videoBgDef("bg_village"), null);
 }
 console.log("দৃশ্য-মডেল/রিগ জোড়া টেস্ট পাস ✔");
+
+// ---- নতুন: দুজনকে আলাদা রাখা (assignSlots) — পাইথন প্রোটোটাইপের সঙ্গে মিল ও সংখ্যা ----
+import { assignSlots } from "../src/lib/mocap";
+{
+  const fx = JSON.parse(fs.readFileSync(new URL("./fixtures/assign_fx.json", import.meta.url), "utf8")) as { frames: number[][][]; expect: (number[] | null)[][] };
+  const t = assignSlots(fx.frames);
+  const valid = t.map((x) => x.filter(Boolean).length);
+  assert.ok(valid[0] >= 145 && valid[1] >= 145, "দুজনই প্রায় সব ফ্রেমে থাকবে: " + valid);
+  let same = 0, tot = 0, apart = 0;
+  for (let k = 0; k < 2; k++) for (let i = 0; i < t[k].length; i++) { tot++; if (t[k][i] && fx.expect[k][i] && t[k][i]![69] === fx.expect[k][i]![69]) same++; }
+  for (let i = 0; i < t[0].length; i++) if (t[0][i] && t[1][i] && Math.abs(t[0][i]![69] - t[1][i]![69]) > 0.1) apart++;
+  assert.ok(same / tot > 0.97, "পাইথনের সঙ্গে মিল " + same + "/" + tot);
+  assert.ok(apart / t[0].length > 0.9, "দুজন চেপে যায়নি");
+  const lx = t[0].filter(Boolean).map((p) => (p![69] + p![72]) / 2), rx = t[1].filter(Boolean).map((p) => (p![69] + p![72]) / 2);
+  assert.ok(lx.reduce((a, b) => a + b, 0) / lx.length < rx.reduce((a, b) => a + b, 0) / rx.length, "বাঁ জন বাঁয়েই");
+  console.log("assignSlots পাস ✔ বৈধ", valid, "মিল", same + "/" + tot, "আলাদা", apart);
+}
+
+// ---- নতুন: চরিত্র-প্রোফাইল রঙ (পাইথন প্রোটোটাইপের সঙ্গে মিল) ও Look দিয়ে রেন্ডার ----
+import { lift, profileToLook } from "../src/lib/profile";
+import { addObject, newMovie, setLook, updateScene, updateObj } from "../src/lib/scene";
+import { sceneItems } from "../src/lib/render";
+{
+  const near = (a: string, b: string) => [1, 3, 5].every((i) => Math.abs(parseInt(a.slice(i, i + 2), 16) - parseInt(b.slice(i, i + 2), 16)) <= 1);
+  assert.ok(near(lift([0x16, 0x18, 0x28], 0.5, 0.55), "#39407f") && near(lift([0x55, 0x0d, 0x1d], 0.5, 0.55), "#88142e"), "রঙ-উজ্জ্বল করা পাইথনের সঙ্গে মেলে");
+  const look = profileToLook({ skin: [47, 26, 22], hair: [30, 27, 30], top: [22, 24, 40], top2: [44, 46, 66], bottom: [26, 32, 63], longHair: true, samples: 10 }, "bun");
+  assert.equal(look.hairStyle, "long"); assert.equal(profileToLook({ skin: [90, 50, 40], hair: [30, 27, 30], top: [22, 24, 40], top2: [44, 46, 66], bottom: [26, 32, 63], longHair: true, samples: 3 }, "short").hairStyle, undefined);
+  let m = newMovie("t"); const sid = m.scenes[0].id; const r = addObject(m, sid, "woman"); m = r.movie;
+  m = setLook(m, m.cast[m.cast.length - 1].id, look);
+  const items = sceneItems(m, m.scenes[0], 0.5); assert.ok(items.length === 1 && items[0].shapes.length > 20);
+  assert.ok(JSON.stringify(items[0].shapes).includes(look.top!.toLowerCase()) || JSON.stringify(items[0].shapes).includes(look.top!), "পোশাকের রঙ সত্যিই আঁকায় এসেছে");
+  console.log("প্রোফাইল/Look টেস্ট পাস ✔", look);
+}

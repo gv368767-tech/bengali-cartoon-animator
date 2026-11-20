@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
  */
 object VideoPose {
   private const val MODEL = "pose_landmarker_lite.task"
-  private const val DET_W = 540
+  private const val DET_W = 720
 
   private fun open(path: String): MediaMetadataRetriever {
     val r = MediaMetadataRetriever(); r.setDataSource(path.removePrefix("file://")); return r
@@ -38,11 +38,11 @@ object VideoPose {
     val s = if (b.width == w) b else Bitmap.createScaledBitmap(b, w, h, true)
     return if (s.config == Bitmap.Config.ARGB_8888) s else s.copy(Bitmap.Config.ARGB_8888, false)
   }
-  private fun landmarker(ctx: Context, mode: RunningMode, poses: Int): PoseLandmarker {
+  private fun landmarker(ctx: Context, mode: RunningMode, poses: Int, conf: Float = 0.5f): PoseLandmarker {
     val o = PoseLandmarker.PoseLandmarkerOptions.builder()
       .setBaseOptions(BaseOptions.builder().setModelAssetPath(MODEL).build())
       .setRunningMode(mode).setNumPoses(poses)
-      .setMinPoseDetectionConfidence(0.5f).setMinPosePresenceConfidence(0.5f).setMinTrackingConfidence(0.5f)
+      .setMinPoseDetectionConfidence(conf).setMinPosePresenceConfidence(conf).setMinTrackingConfidence(conf)
       .build()
     return PoseLandmarker.createFromOptions(ctx, o)
   }
@@ -84,7 +84,7 @@ object VideoPose {
       val first = scaledFrame(r, 0, dw, dh) ?: throw Exception("ভিডিওর প্রথম ফ্রেম ডিকোড করা যায়নি (ফোনের ডিকোডার এই ভিডিও পড়তে পারছে না)")
       val frameMs = System.currentTimeMillis() - tFrame0
       val tModel0 = System.currentTimeMillis()
-      val lm = try { landmarker(ctx, RunningMode.VIDEO, 4) } catch (e: Throwable) { throw Exception("মডেল লোড হয়নি: " + e.javaClass.simpleName + " " + e.message) }
+      val lm = try { landmarker(ctx, RunningMode.IMAGE, 2, 0.3f) } catch (e: Throwable) { throw Exception("মডেল লোড হয়নি: " + e.javaClass.simpleName + " " + e.message) }
       val modelMs = System.currentTimeMillis() - tModel0
       val n = max(1, min(maxFrames, (durMs * fps / 1000).toInt()))
       det = Det(r, lm, fps, n, sw, sh, dw, dh)
@@ -96,19 +96,53 @@ object VideoPose {
     }
   }
 
-  /** ফ্রেম [start, start+count) — ফল: {frames:[[pose,...],...], ms}। প্রতিটি ফ্রেম আলাদাভাবে ধরা হয়। */
+  // ---- ঠিক-ভঙ্গি যাচাই + একই মানুষ মুছে ফেলা ----
+  private fun pose99(l: List<com.google.mediapipe.tasks.components.containers.NormalizedLandmark>, x0: Double, y0: Double, x1: Double, y1: Double): DoubleArray {
+    val a = DoubleArray(99)
+    for ((j, p) in l.withIndex()) { if (j >= 33) break; a[j * 3] = x0 + p.x() * (x1 - x0); a[j * 3 + 1] = y0 + p.y() * (y1 - y0); a[j * 3 + 2] = p.visibility().orElse(0f).toDouble() }
+    return a
+  }
+  private fun my(a: DoubleArray, i: Int, j: Int) = (a[i * 3 + 1] + a[j * 3 + 1]) / 2
+  /** মাথা < কাঁধ < কোমর < হাঁটু < গোড়ালি (উল্টো/ভুল বসা কঙ্কাল বাদ) */
+  private fun sane(a: DoubleArray): Boolean {
+    val sh = my(a, 11, 12); val hp = my(a, 23, 24); val kn = my(a, 25, 26); val an = my(a, 27, 28); val t = hp - sh
+    return a[1] < sh && sh < hp && hp < kn && kn < an + 0.03 && t > 0.05 && t < 0.5 && (an - sh) > 0.15 && a[1] < my(a, 12, 12) && a[1] < my(a, 24, 24)
+  }
+  private fun score(a: DoubleArray): Double { var s = 0.0; for (j in intArrayOf(0, 11, 12, 23, 24, 25, 26, 27, 28)) s += a[j * 3 + 2]; return s / 9 }
+  private fun hip(a: DoubleArray, asp: Double) = doubleArrayOf((a[23 * 3] + a[24 * 3]) / 2, (a[23 * 3 + 1] + a[24 * 3 + 1]) / 2 * asp)
+  private fun dedupe(c: List<DoubleArray>, asp: Double): List<DoubleArray> {
+    val keep = ArrayList<DoubleArray>()
+    for (p in c.sortedByDescending { score(it) }) {
+      val hp = hip(p, asp)
+      if (keep.all { q -> val hq = hip(q, asp); Math.hypot(hp[0] - hq[0], hp[1] - hq[1]) > 0.12 }) keep.add(p)
+    }
+    return keep
+  }
+  private fun runCrop(d: Det, bmp: Bitmap, x0: Double, y0: Double, x1: Double, y1: Double, out: ArrayList<DoubleArray>) {
+    val cx = (x0 * bmp.width).toInt().coerceIn(0, bmp.width - 2); val cy = (y0 * bmp.height).toInt().coerceIn(0, bmp.height - 2)
+    val cw = ((x1 - x0) * bmp.width).toInt().coerceIn(2, bmp.width - cx); val ch = ((y1 - y0) * bmp.height).toInt().coerceIn(2, bmp.height - cy)
+    val crop = if (cx == 0 && cy == 0 && cw == bmp.width && ch == bmp.height) bmp else Bitmap.createBitmap(bmp, cx, cy, cw, ch)
+    val res = d.lm.detect(BitmapImageBuilder(crop).build())
+    for (l in res.landmarks()) { val a = pose99(l, x0, y0, x1, y1); if (sane(a)) out.add(a) }
+    if (crop !== bmp) crop.recycle()
+  }
+
+  /** ফ্রেম [start, start+count) — ফল: {frames:[[pose99,...],...], ms}। প্রতি ফ্রেমে একাধিক অংশ কেটে খোঁজা, ভুল কঙ্কাল বাদ, একই মানুষ একবারই */
   fun detectNext(start: Int, count: Int): String {
     val d = det ?: throw Exception("শনাক্তকরণ শুরু হয়নি")
     val t0 = System.currentTimeMillis()
-    val frames = JSONArray()
+    val frames = JSONArray(); val asp = d.dh.toDouble() / d.dw
     try {
       for (i in start until min(d.n, start + count)) {
         val ms = i * 1000L / d.fps
         val bmp = scaledFrame(d.r, ms, d.dw, d.dh)
         val fa = JSONArray()
         if (bmp != null) {
-          val res = d.lm.detectForVideo(BitmapImageBuilder(bmp).build(), ms)
-          for (pose in res.landmarks()) fa.put(poseJson(pose) { x, y -> Pair(x.toDouble(), y.toDouble()) })
+          val cand = ArrayList<DoubleArray>()
+          runCrop(d, bmp, 0.0, 0.0, 1.0, 1.0, cand); runCrop(d, bmp, 0.0, 0.1, 0.65, 1.0, cand); runCrop(d, bmp, 0.35, 0.1, 1.0, 1.0, cand)
+          var u = dedupe(cand, asp)
+          if (u.size < 2) { runCrop(d, bmp, 0.0, 0.2, 0.5, 1.0, cand); runCrop(d, bmp, 0.5, 0.2, 1.0, 1.0, cand); u = dedupe(cand, asp) }
+          for (a in u.take(4)) { val j = JSONArray(); for (v in a) j.put(Math.round(v * 10000) / 10000.0); fa.put(j) }
           bmp.recycle()
         }
         frames.put(fa)
@@ -272,6 +306,61 @@ object VideoPose {
       return JSONObject().put("w", pw).put("h", ph).toString()
     } catch (e: Throwable) { throw if (e is Exception) e else Exception(e.javaClass.simpleName + ": " + e.message) }
     finally { plateClose() }
+  }
+
+
+  /**
+   * চরিত্রের প্রোফাইল: প্রতিটি মানুষের ভিডিও থেকে চামড়া, চুল, পোশাকের উপরের/নিচের রঙ ও চুল লম্বা কি না।
+   * মুখ-গাল, কপালের উপর, ধড়ের মাঝখান ও উরুর অংশের ছোট ছোট টুকরোর মধ্যমা রঙ (ক্লাসিক পদ্ধতি, AI নয়)।
+   * persons: {persons:[[pose99|null,...],...]}। ফল: [{skin:[r,g,b],hair,top,top2,bottom,longHair,samples}, ...]
+   */
+  fun profile(path: String, fps: Int, tracks: String): String {
+    val persons = JSONObject(tracks).getJSONArray("persons")
+    val r = try { open(path) } catch (e: Throwable) { throw Exception("ভিডিও খোলা যায়নি: " + e.message) }
+    val res = JSONArray()
+    try {
+      for (k in 0 until persons.length()) {
+        val t = persons.getJSONArray(k)
+        val ok = (0 until t.length()).filter { t.optJSONArray(it) != null }
+        val pick = if (ok.size <= 18) ok else (0 until 18).map { ok[it * (ok.size - 1) / 17] }
+        val sk = ArrayList<IntArray>(); val hr = ArrayList<IntArray>(); val tp = ArrayList<IntArray>(); val tp2 = ArrayList<IntArray>(); val bt = ArrayList<IntArray>(); val sd = ArrayList<IntArray>()
+        for (i in pick) {
+          val p = t.getJSONArray(i); val bmp = frameAt(r, i * 1000L / fps, 540) ?: continue
+          val W = bmp.width; val H = bmp.height
+          fun X(j: Int) = p.getDouble(j * 3); fun Y(j: Int) = p.getDouble(j * 3 + 1)
+          fun patch(cx: Double, cy: Double, rx: Double): Array<IntArray> {          // rx = চওড়ার ভগ্নাংশ
+            val x0 = ((cx - rx) * W).toInt().coerceIn(0, W - 1); val x1 = ((cx + rx) * W).toInt().coerceIn(x0 + 1, W)
+            val ry = rx * W / H; val y0 = ((cy - ry) * H).toInt().coerceIn(0, H - 1); val y1 = ((cy + ry) * H).toInt().coerceIn(y0 + 1, H)
+            val n = (x1 - x0) * (y1 - y0); val px = IntArray(n); bmp.getPixels(px, 0, x1 - x0, x0, y0, x1 - x0, y1 - y0)
+            return arrayOf(IntArray(n) { (px[it] shr 16) and 255 }, IntArray(n) { (px[it] shr 8) and 255 }, IntArray(n) { px[it] and 255 })
+          }
+          fun med(a: IntArray): Int { val s = a.copyOf(); s.sort(); return s[s.size / 2] }
+          fun medC(c: Array<IntArray>) = intArrayOf(med(c[0]), med(c[1]), med(c[2]))
+          val ear = max(0.03, Math.abs(X(7) - X(8)))
+          val mx = (X(9) + X(10)) / 2; val my = (Y(9) + Y(10)) / 2; val ex = (X(2) + X(5)) / 2; val ey = (Y(2) + Y(5)) / 2
+          sk.add(medC(patch((X(0) + mx) / 2, (Y(0) + my) / 2, 0.18 * ear)))
+          hr.add(medC(patch(ex, ey - 1.2 * (my - ey), 0.22 * ear)))
+          val shx = (X(11) + X(12)) / 2; val shy = (Y(11) + Y(12)) / 2; val hx = (X(23) + X(24)) / 2; val hy = (Y(23) + Y(24)) / 2
+          val sw = Math.abs(X(11) - X(12))
+          for (sgn in intArrayOf(-1, 1)) sd.add(medC(patch(shx + sgn * 0.42 * sw, shy + 0.06 * (hy - shy), 0.05 * sw)))
+          val torso = patch(shx + 0.5 * (hx - shx), shy + 0.45 * (hy - shy), 0.22 * sw)
+          val tc = medC(torso); tp.add(tc)
+          // উপরের রঙের চেয়ে হালকা অর্ধেকের মধ্যমা = দ্বিতীয় রঙ (পাড়/নকশা)
+          val lum = IntArray(torso[0].size) { (77 * torso[0][it] + 150 * torso[1][it] + 29 * torso[2][it]) shr 8 }
+          val ml = med(lum); val idx = lum.indices.filter { lum[it] >= ml }
+          tp2.add(if (idx.isEmpty()) tc else intArrayOf(med(IntArray(idx.size) { torso[0][idx[it]] }), med(IntArray(idx.size) { torso[1][idx[it]] }), med(IntArray(idx.size) { torso[2][idx[it]] })))
+          val kx = (X(25) + X(26)) / 2; val ky = (Y(25) + Y(26)) / 2
+          bt.add(medC(patch((hx + kx) / 2, (hy + ky) / 2, 0.2 * sw)))
+          bmp.recycle()
+        }
+        fun mm(l: ArrayList<IntArray>): JSONArray { val o = JSONArray(); for (c in 0 until 3) { val a = IntArray(l.size) { l[it][c] }; a.sort(); o.put(if (a.isEmpty()) 128 else a[a.size / 2]) }; return o }
+        val dark = sd.count { (it[0] + it[1] + it[2]) / 3 < 70 }
+        val hairC = mm(hr); val hairDark = (hairC.getInt(0) + hairC.getInt(1) + hairC.getInt(2)) / 3 < 70
+        res.put(JSONObject().put("skin", mm(sk)).put("hair", hairC).put("top", mm(tp)).put("top2", mm(tp2)).put("bottom", mm(bt)).put("longHair", hairDark && dark > sd.size / 4).put("samples", pick.size))
+      }
+    } catch (e: Throwable) { throw if (e is Exception) e else Exception(e.javaClass.simpleName + ": " + e.message) }
+    finally { try { r.release() } catch (_: Throwable) {} }
+    return res.toString()
   }
 
   fun plateClose() { val P = plate; plate = null; if (P != null) try { P.r.release() } catch (_: Throwable) {} }

@@ -2,19 +2,22 @@
 // কোনো সার্ভার/ক্লাউড/জেনারেটিভ AI নেই। ভঙ্গি-শনাক্তকরণ = অফলাইন MediaPipe (নেটিভ মডিউলে)।
 import * as FileSystem from "expo-file-system";
 import StudioExport from "../../modules/studio-export";
-import { CropResult, Pose33, Track, buildMocap, cropRequests, mergeCrops, trackIdentities } from "./mocap";
-import { Movie, addClip, addObject, newMovie, renameCast, updateObj, updateScene, uid } from "./scene";
+import { CropResult, Pose33, Track, assignSlots, buildMocap, cropRequests, mergeCrops } from "./mocap";
+import { RawProfile, profileToLook } from "./profile";
+import { HUMANS } from "../art/human";
+import { Movie, addClip, setLook, addObject, newMovie, renameCast, updateObj, updateScene, uid } from "./scene";
 import { setVideoBgDir, videoBgId, videoBgPath } from "../art/videoBg";
 
 export const FPS = 15;                       // ফোনে দ্রুত ও নিরাপদ; নড়াচড়া মসৃণ করা হয় (mocap সময়-ইন্টারপোলেশন করে)
 export const MAX_SECONDS = 40;
 export type Progress = (p: number, msg: string) => void;
+export type BgChoice = { mode: "orig" | "cartoon" | "library"; libId?: string };   // ১) মূল পটভূমি ২) মূল পটভূমি কার্টুন ৩) অ্যাপের কার্টুন পটভূমি
 export type Control = { cancelled: () => boolean; log: (line: string) => void };
 const strip = (u: string) => u.replace("file://", "");
 export class Cancelled extends Error { constructor() { super("বাতিল করা হয়েছে"); } }
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));   // UI-কে শ্বাস নিতে দেওয়া
 
-export async function buildVideoCartoon(videoUri: string, assetIds: [string, string], onProgress: Progress, ctl?: Partial<Control>): Promise<{ movie: Movie; people: number; notes: string[] }> {
+export async function buildVideoCartoon(videoUri: string, assetIds: [string, string], onProgress: Progress, ctl?: Partial<Control>, bgChoice: BgChoice = { mode: "orig" }): Promise<{ movie: Movie; people: number; notes: string[] }> {
   if (!StudioExport) throw new Error("এই সুবিধা শুধু ইনস্টল করা অ্যাপে (APK) চলে");
   const X = StudioExport;
   const log = ctl?.log ?? (() => {}); const stop = () => { if (ctl?.cancelled?.()) throw new Cancelled(); };
@@ -48,7 +51,7 @@ export async function buildVideoCartoon(videoUri: string, assetIds: [string, str
   } finally { try { await X.detectClose(); } catch { /* বন্ধ করতে না পারলেও এগোই */ } }
   const det = { w: info.w, h: info.h, n: frames.length, frames };
   onProgress(0.47, "দুজনকে আলাদা করা হচ্ছে…"); await tick();
-  let tracks: Track[] = trackIdentities(det.frames);
+  let tracks: Track[] = assignSlots(det.frames, det.h / det.w);
   const found = tracks.map((t) => t.filter(Boolean).length);
   log(`ট্র্যাক: বাঁ ${found[0]}, ডান ${found[1]} ফ্রেমে মানুষ`);
   if (found[0] < 5 && found[1] < 5) throw new Error("ভিডিওতে মানুষ পাওয়া যায়নি। পুরো শরীর দেখা যায় এমন ভিডিও দিন।");
@@ -72,30 +75,43 @@ export async function buildVideoCartoon(videoUri: string, assetIds: [string, str
     const a = await X.analyzeAudio(strip(videoUri), FPS);
     const mx = Math.max(0.0001, ...a.envelope); env = a.envelope.map((v) => Math.min(1, v / mx));
   } catch { notes.push("ভিডিওতে অডিও পাওয়া যায়নি; ঠোঁট নড়বে না"); }
-  // খালি পটভূমি — ধাপে ধাপে, অগ্রগতি সহ
-  const code = uid().slice(0, 5), id = videoBgId(code, det.w, det.h);
-  const dir = (FileSystem.documentDirectory ?? "") + "videobg/";
-  const dinfo = await FileSystem.getInfoAsync(dir); if (!dinfo.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
-  setVideoBgDir(dir);
-  try {
-    stop(); onProgress(0.64, "পটভূমি বানানো শুরু…");
-    const pb = JSON.parse(await X.plateBegin(strip(videoUri), FPS, JSON.stringify({ persons: people === 2 ? tracks : [tracks[0]] }))) as { steps: number };
-    let done = 0;
-    while (done < pb.steps) { stop(); done = await X.plateStep(3); onProgress(0.65 + 0.2 * (done / pb.steps), `পটভূমি: ${done}/${pb.steps} নমুনা-ফ্রেম`); await tick(); }
-    onProgress(0.86, "পটভূমির ফাঁক ভরা হচ্ছে…"); await tick();
-    await X.plateFinish(strip(videoBgPath(id)));
-    log("✔ পটভূমি তৈরি");
-  } catch (e: any) { try { await X.plateClose(); } catch { /* */ } if (e instanceof Cancelled) throw e; log(`⚠ পটভূমি: ${String(e?.message ?? e)}`); notes.push("পটভূমি বানানো যায়নি: " + String(e?.message ?? e)); }
+  // পটভূমি — ৩টি বিকল্প
+  const code = uid().slice(0, 5); let bgId = bgChoice.libId ?? "bg_village";
+  if (bgChoice.mode !== "library") {
+    const id = videoBgId(code, det.w, det.h);
+    const dir = (FileSystem.documentDirectory ?? "") + "videobg/";
+    const dinfo = await FileSystem.getInfoAsync(dir); if (!dinfo.exists) await FileSystem.makeDirectoryAsync(dir, { intermediates: true });
+    setVideoBgDir(dir);
+    try {
+      stop(); onProgress(0.64, "পটভূমি বানানো শুরু…");
+      const pb = JSON.parse(await X.plateBegin(strip(videoUri), FPS, JSON.stringify({ persons: people === 2 ? tracks : [tracks[0]] }))) as { steps: number };
+      let done = 0;
+      while (done < pb.steps) { stop(); done = await X.plateStep(3); onProgress(0.65 + 0.15 * (done / pb.steps), `পটভূমি: ${done}/${pb.steps} নমুনা-ফ্রেম`); await tick(); }
+      onProgress(0.81, "পটভূমির ফাঁক ভরা হচ্ছে…"); await tick();
+      await X.plateFinish(strip(videoBgPath(id)));
+      log("✔ খালি পটভূমি তৈরি"); bgId = id;
+      if (bgChoice.mode === "cartoon") {
+        onProgress(0.85, "পটভূমি কার্টুন করা হচ্ছে…");
+        const cid = videoBgId(code + "c", det.w, det.h);
+        await X.cartoonImage(strip(videoBgPath(id)), strip(videoBgPath(cid)), 7); bgId = cid; log("✔ পটভূমি কার্টুন");
+      }
+    } catch (e: any) { try { await X.plateClose(); } catch { /* */ } if (e instanceof Cancelled) throw e; log(`⚠ পটভূমি: ${String(e?.message ?? e)}`); notes.push("পটভূমি বানানো যায়নি, অ্যাপের পটভূমি বসানো হয়েছে: " + String(e?.message ?? e)); bgId = "bg_village"; }
+  }
+  // চরিত্রের প্রোফাইল: ভিডিও থেকে চামড়া/চুল/পোশাকের রঙ
+  let profs: RawProfile[] = [];
+  try { stop(); onProgress(0.87, "ভিডিও থেকে পোশাক ও চুলের রঙ নেওয়া হচ্ছে…"); profs = JSON.parse(await X.profile(strip(videoUri), FPS, JSON.stringify({ persons: people === 2 ? tracks : [tracks[0]] }))); log("✔ চরিত্র-প্রোফাইল " + JSON.stringify(profs.map((p) => ({ top: p.top, skin: p.skin, long: p.longHair })))); }
+  catch (e: any) { if (e instanceof Cancelled) throw e; log(`⚠ প্রোফাইল: ${String(e?.message ?? e)}`); notes.push("পোশাকের রঙ নেওয়া যায়নি; চরিত্র নিজস্ব রঙে থাকবে"); }
   onProgress(0.9, "অ্যাপের চরিত্রে নড়াচড়া বসানো হচ্ছে…");
   const n = det.n, dur = n / FPS;
   let m = newMovie("ভিডিও থেকে কার্টুন"); const sid = m.scenes[0].id;
-  m = updateScene(m, sid, (s) => ({ ...s, bg: id, duration: Math.min(60, Math.ceil(dur)) }));
+  m = updateScene(m, sid, (s) => ({ ...s, bg: bgId, duration: Math.min(60, Math.ceil(dur)) }));
   const faces: (1 | -1)[] = [1, -1];
   for (let k = 0; k < people; k++) {
     const r = addObject(m, sid, assetIds[k]); m = r.movie;
     const cid = m.cast[m.cast.length - 1].id; m = renameCast(m, cid, k === 0 ? "বাঁ জন" : "ডান জন");
     const mc = buildMocap(tracks[k].map((p) => p ?? null), det.w, det.h, { fps: FPS, face: people === 1 ? 1 : faces[k], env });
     m = updateScene(m, sid, (s) => updateObj(s, r.objId, (o) => ({ ...o, mocap: mc })));
+    if (profs[k]) m = setLook(m, cid, profileToLook(profs[k], HUMANS[assetIds[k]]?.hairStyle));
   }
   m = updateScene(m, sid, (s) => addClip(s, { kind: "voice", name: "ভিডিওর অডিও", uri: videoUri, t: 0, dur: Math.min(dur, 60), vol: 1 }));
   onProgress(1, "প্রস্তুত");

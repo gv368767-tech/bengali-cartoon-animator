@@ -39,6 +39,18 @@ object Cartoonizer {
     } finally { try { m.release() } catch (_: Throwable) {} }
   }
 
+  /** একটি ছবি (পটভূমি) কার্টুন করে JPEG হিসেবে সংরক্ষণ */
+  fun image(inPath: String, outPath: String, levels: Int): String {
+    try {
+      val src = android.graphics.BitmapFactory.decodeFile(inPath.removePrefix("file://")) ?: throw Exception("ছবি পড়া যায়নি")
+      val s2 = if (src.config == Bitmap.Config.ARGB_8888) src else src.copy(Bitmap.Config.ARGB_8888, false)
+      reset(); val out = Bitmap.createBitmap(s2.width, s2.height, Bitmap.Config.ARGB_8888)
+      apply(s2, out, levels); reset()
+      java.io.FileOutputStream(java.io.File(outPath.removePrefix("file://"))).use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
+      return JSONObject().put("w", s2.width).put("h", s2.height).toString()
+    } catch (e: Throwable) { throw if (e is Exception) e else Exception(e.javaClass.simpleName + ": " + e.message) }
+  }
+
   fun reset() { try { r?.release() } catch (_: Throwable) {}; r = null; path = ""; pr = null; pg = null; pb = null }
 
   /** ফ্রেম [start, start+count) কার্টুন করে সেশনে এনকোড। ফেরত: কত ms লাগল */
@@ -86,7 +98,7 @@ object Cartoonizer {
     }
   }
 
-  private fun apply(src: Bitmap, out: Bitmap, levels: Int) {
+  internal fun apply(src: Bitmap, out: Bitmap, levels: Int) {
     val w = src.width; val h = src.height; val np = w * h
     val px = IntArray(np); src.getPixels(px, 0, w, 0, 0, w, h)
     val r = IntArray(np); val g = IntArray(np); val b = IntArray(np); val tmp = IntArray(np)

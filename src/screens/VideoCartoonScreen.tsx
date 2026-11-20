@@ -3,6 +3,7 @@ import React, { useRef, useState } from "react";
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { ASSETS } from "../art/registry";
+import { BACKGROUNDS } from "../art/backgrounds";
 import { C } from "../lib/theme";
 import { Movie } from "../lib/scene";
 import { saveMovie } from "../lib/storage";
@@ -21,6 +22,8 @@ export default function VideoCartoonScreen({ onBack, onOpen }: { onBack: () => v
     const r = await DocumentPicker.getDocumentAsync({ type: "video/*", copyToCacheDirectory: true });
     if (!r.canceled && r.assets?.[0]) setVideo({ uri: r.assets[0].uri, name: r.assets[0].name });
   };
+  const [bgMode, setBgMode] = useState<"orig" | "cartoon" | "library">("cartoon");
+  const [libId, setLibId] = useState(BACKGROUNDS[0].id);
   const [mode, setMode] = useState<"full" | "char">("full");
   const [fps, setFps] = useState<15 | 24 | 30>(15);
   const [logs, setLogs] = useState<string[]>([]);
@@ -36,7 +39,7 @@ export default function VideoCartoonScreen({ onBack, onOpen }: { onBack: () => v
         setDone(r.path);
         Alert.alert("কার্টুন ভিডিও তৈরি", `${r.w}×${r.h}, ${r.frames} ফ্রেম, ${r.secs.toFixed(1)}s\nনিচের "গ্যালারিতে সেভ" চাপুন।` + (r.warnings.includes("no_audio") ? "\n(মূল ভিডিওতে অডিও পাওয়া যায়নি)" : ""));
       } else {
-        const r = await buildVideoCartoon(video.uri, [a, b], (p, t) => { setPct(p); setMsg(t); }, ctl);
+        const r = await buildVideoCartoon(video.uri, [a, b], (p, t) => { setPct(p); setMsg(t); }, ctl, { mode: bgMode, libId });
         await saveMovie(r.movie);
         if (r.notes.length) Alert.alert("জানিয়ে রাখি", r.notes.join("\n"));
         onOpen(r.movie);
@@ -73,6 +76,13 @@ export default function VideoCartoonScreen({ onBack, onOpen }: { onBack: () => v
       ) : (<>
         <Row title="বাঁ দিকের মানুষের চরিত্র" val={a} set={setA} />
         <Row title="ডান দিকের মানুষের চরিত্র" val={b} set={setB} />
+        <View style={{ marginTop: 14 }}>
+          <Text style={s.h}>পটভূমি</Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            {([["orig", "১) মূল ভিডিওর পটভূমি"], ["cartoon", "২) মূল পটভূমি কার্টুন করে"], ["library", "৩) নতুন কার্টুন পটভূমি"]] as const).map(([k, t]) => <TouchableOpacity key={k} disabled={busy} onPress={() => setBgMode(k)} style={[s.chip, bgMode === k && s.chipOn, { marginBottom: 6 }]}><Text style={{ color: C.text }}>{t}</Text></TouchableOpacity>)}
+          </View>
+          {bgMode === "library" ? <ScrollView horizontal showsHorizontalScrollIndicator={false}>{BACKGROUNDS.map((g) => <TouchableOpacity key={g.id} onPress={() => setLibId(g.id)} style={[s.chip, libId === g.id && s.chipOn]}><Text style={{ color: C.text }}>{g.name}</Text></TouchableOpacity>)}</ScrollView> : <Text style={{ color: C.dim, fontSize: 12 }}>মূল পটভূমি = ভিডিও থেকে মানুষ সরিয়ে বানানো; ক্যামেরা স্থির থাকলে ভালো হয়।</Text>}
+        </View>
       </>)}
       <TouchableOpacity onPress={go} disabled={!video || busy} style={[s.btn, { marginTop: 22, opacity: video && !busy ? 1 : 0.5 }]}><Text style={{ color: "#1a1200", fontWeight: "800" }}>{busy ? "⏳ তৈরি হচ্ছে…" : "▶ কার্টুন বানান"}</Text></TouchableOpacity>
       {busy ? <View style={{ marginTop: 14 }}><ActivityIndicator color={C.accent} /><Text style={{ color: C.dim, marginTop: 8 }}>{Math.round(pct * 100)}% — {msg}</Text>

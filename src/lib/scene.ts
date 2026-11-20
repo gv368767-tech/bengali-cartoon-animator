@@ -9,7 +9,7 @@ import { HumanDef } from "../art/human";
 export const STAGE_W = 1280, STAGE_H = 720;
 export type Key = { t: number; x: number; y: number; s: number; r: number };
 export type Act = { t: number; action: Action };
-export type Look = Partial<Pick<HumanDef, "skin" | "hair" | "top" | "bottom">>;
+export type Look = Partial<Pick<HumanDef, "skin" | "hair" | "top" | "top2" | "bottom" | "hairStyle">>;
 export type CastMember = { id: string; assetId: string; name: string; look?: Look };
 export type ViewKey = { t: number; view: View };
 export type Obj = { id: string; assetId: string; castId?: string; flip: boolean; keys: Key[]; acts: Act[]; views?: ViewKey[]; mocap?: Mocap /* ভিডিও থেকে নেওয়া নড়াচড়া (ঐচ্ছিক) */ };
