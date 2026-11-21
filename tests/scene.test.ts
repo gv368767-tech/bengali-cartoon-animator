@@ -2,12 +2,16 @@ import assert from "node:assert/strict";
 import * as S from "../src/lib/scene";
 import { ASSETS, TOTAL_ASSETS } from "../src/art/registry";
 import { BACKGROUNDS } from "../src/art/backgrounds";
+import { BACKGROUNDS2 } from "../src/art/backgrounds2";
+const NEWBG = new Set(BACKGROUNDS2.map((b) => b.id));
 
 // ৫০টি অ্যাসেট
-const LEGACY = ASSETS.filter((a) => a.cat !== "hindu" && a.cat !== "style2").length + BACKGROUNDS.length;
+const LEGACY = ASSETS.filter((a) => a.cat !== "hindu" && a.cat !== "style2").length + BACKGROUNDS.filter((b) => !NEWBG.has(b.id)).length;
 assert.equal(LEGACY, 50, "আগের ৫০টি অ্যাসেট অক্ষত");
-assert.equal(TOTAL_ASSETS, 50 + 18 + 13, "৫০ + ১৮ দেবদেবী/বাহন + ১৩ নতুন স্টাইল");
-assert.equal(BACKGROUNDS.length, 8);
+assert.equal(TOTAL_ASSETS, 50 + 18 + 13 + 22, "৫০ + ১৮ দেবদেবী/বাহন + ১৩ নতুন স্টাইল + ২২ নতুন পটভূমি");
+assert.equal(BACKGROUNDS.length, 8 + 22);
+assert.ok(["bg_village","bg_city","bg_road","bg_school","bg_bazaar","bg_field","bg_river","bg_jungle"].every((id) => BACKGROUNDS.some((b) => b.id === id)), "আগের ৮টি পটভূমি অক্ষত");
+assert.equal(new Set(BACKGROUNDS.map((b) => b.id)).size, BACKGROUNDS.length, "পটভূমির id অনন্য");
 for (const a of ASSETS) {
   for (const act of a.actions) {
     const sh = a.build({ action: act as any, phase: 1.3, talk: 0.5, blink: false });

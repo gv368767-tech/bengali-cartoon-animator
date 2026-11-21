@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { Canvas, Group } from "@shopify/react-native-skia";
 import { ASSETS, CATS, Cat, getAsset } from "../art/registry";
 import { BACKGROUNDS } from "../art/backgrounds";
@@ -25,11 +25,17 @@ export default function LibraryScreen({ onBack }: { onBack: () => void }) {
   const [cat, setCat] = useState<Cat>("human");
   const [sel, setSel] = useState<string | null>(null);
   const [act, setAct] = useState<Exclude<Action, "auto">>("stand");
+  const [q, setQ] = useState("");
   const a = sel ? getAsset(sel) : null;
-  const list = ASSETS.filter((x) => x.cat === cat);
+  const qq = q.trim().toLowerCase();
+  // খোঁজ: নাম মিললে সব ধরনের মধ্যে থেকে দেখায়; না থাকলে নির্বাচিত ধরনের তালিকা
+  const list = ASSETS.filter((x) => (qq ? x.name.toLowerCase().includes(qq) || x.id.includes(qq) : x.cat === cat));
+  const bgList = BACKGROUNDS.filter((b) => !qq || b.name.toLowerCase().includes(qq) || b.id.includes(qq));
+  const showBg = qq ? bgList.length > 0 && list.length === 0 : cat === "bg";
   return (
     <View style={s.root}>
       <View style={s.top}><TouchableOpacity onPress={onBack}><Text style={s.back}>← ফিরুন</Text></TouchableOpacity><Text style={s.t}>অ্যাসেট লাইব্রেরি</Text></View>
+      <TextInput value={q} onChangeText={setQ} placeholder="🔎 খুঁজুন (যেমন: মন্দির, নদী, গাড়ি)" placeholderTextColor={C.dim} style={s.search} />
       <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false}>
         {CATS.map((c) => <TouchableOpacity key={c.id} onPress={() => { setCat(c.id); setSel(null); }} style={[s.tab, cat === c.id && { backgroundColor: C.accent }]}><Text style={{ color: cat === c.id ? "#111" : C.text, fontWeight: "700" }}>{c.name}</Text></TouchableOpacity>)}
       </ScrollView>
@@ -41,8 +47,8 @@ export default function LibraryScreen({ onBack }: { onBack: () => void }) {
           </View>
         </View>
       )}
-      <FlatList key={cat} numColumns={cat === "bg" ? 2 : 3} data={cat === "bg" ? (BACKGROUNDS as any[]) : (list as any[])} keyExtractor={(x) => x.id} contentContainerStyle={{ padding: 8 }}
-        renderItem={({ item }) => cat === "bg"
+      <FlatList key={cat + (showBg ? "b" : "a")} numColumns={showBg ? 2 : 3} data={showBg ? (bgList as any[]) : (list as any[])} keyExtractor={(x) => x.id} contentContainerStyle={{ padding: 8 }}
+        renderItem={({ item }) => showBg
           ? <View style={s.cell}><BgThumb id={item.id} w={150} /><Text style={s.n}>{item.name}</Text></View>
           : <TouchableOpacity style={[s.cell, sel === item.id && { borderColor: C.accent, borderWidth: 2 }]} onPress={() => { setSel(item.id); setAct(item.defaultAction); }}><AssetThumb asset={item} size={84} /><Text style={s.n}>{item.name}</Text></TouchableOpacity>} />
     </View>
@@ -51,6 +57,7 @@ export default function LibraryScreen({ onBack }: { onBack: () => void }) {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, paddingTop: 40 }, top: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 8 },
   back: { color: C.accent, fontWeight: "700", marginRight: 12 }, t: { color: C.text, fontSize: 17, fontWeight: "700" },
+  search: { backgroundColor: C.panel2, color: C.text, marginHorizontal: 12, marginBottom: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
   tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: C.panel2, margin: 4 },
   cell: { flex: 1, alignItems: "center", backgroundColor: C.panel, borderRadius: 12, margin: 4, padding: 8 }, n: { color: C.text, marginTop: 4, fontSize: 12 },
 });
