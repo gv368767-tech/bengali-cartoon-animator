@@ -68,6 +68,14 @@ export function rigFor(act: string, ph: number): Rig {
       r.L = { a: [2.0, PI + 1.1] }; r.R = { a: [2.0, PI + 1.1] }; r.headL = r.headR = true; r.sway = sin(ph * 14) * 2; r.expr = "scared"; r.eyes = "wide"; r.noHold = true; r.prop = "sweat"; r.hd = 2; break;
     case "think":
       r.R = { a: [2.3, -1.3] }; r.L = { a: [0.6, -1.2] }; r.armsFront = true; r.headR = true; r.tilt = 0.1; r.eyes = "up"; r.expr = "think"; r.noHold = true; r.prop = "think"; break;
+    case "pranam": r.L = { h: [-9, -150] }; r.R = { h: [9, -150] }; r.armsFront = true; r.tilt = 0.16 + 0.1 * s; r.hd = 10 + 6 * s; r.expr = "smile"; r.eyes = "closed"; r.noHold = true; break;
+    case "pooja": r.L = { h: [-30, -150] }; r.R = { h: [30, -150] }; r.armsFront = true; r.hd = 5 + 2 * s; r.expr = "smile"; r.noHold = true; r.prop = "thali"; break;
+    case "arti": r.R = { h: [44 + 18 * cos(ph * 2), -170 + 18 * sin(ph * 2)] }; r.L = { h: [-32, -136 + 6 * sin(ph * 4)] }; r.armsFront = true; r.hd = 2; r.expr = "smile"; r.noHold = true; r.prop = "arti"; break;
+    case "sing": r.R = { h: [38, -244] }; r.L = { a: [1.1 + 0.5 * sin(ph * 1.3), 1.4 + 0.6 * sin(ph * 1.3)] }; r.sway = sin(ph * 0.9) * 3; r.hd = sin(ph * 1.6) * 3; r.tilt = sin(ph * 0.8) * 0.05; r.expr = "smile"; r.talk = true; r.noHold = true; r.prop = "mic"; break;
+    case "sell": r.R = { h: [54, -158 + 5 * sin(ph * 1.5)] }; r.L = { a: [0.6 + 0.2 * sin(ph), 0.9] }; r.expr = "smile"; r.talk = true; r.noHold = true; r.prop = "fruit"; r.hd = sin(ph * 2) * 2; break;
+    case "weigh": r.L = { h: [-30, -205] }; r.R = { h: [30, -205] }; r.armsFront = true; r.expr = "smile"; r.noHold = true; r.prop = "scale"; r.eyes = "down"; break;
+    case "pay": r.R = { h: [58, -160 + 4 * sin(ph * 1.5)] }; r.L = { a: [0.3, 0.5] }; r.expr = "smile"; r.talk = true; r.noHold = true; r.prop = "note"; break;
+    case "holdhand": r.drop = 38; r.bob = 0; r.sh = sin(ph * 0.6) * 1.2; r.hd = sin(ph * 0.5) * 2; r.L = { a: [0.25, 0.4] }; r.R = { a: [0.7, 0.75] }; r.prop = "bench"; r.expr = "smile"; r.talk = true; break;
     case "cook":
       r.R = { h: [38 + 14 * cos(ph * 2), -146 + 6 * sin(ph * 2)] }; r.L = { h: [-4, -118] }; r.armsFront = true; r.expr = "smile"; r.noHold = true; r.prop = "cook"; r.bob = 0; break;
     case "teach":
@@ -242,6 +250,36 @@ function propShapes(name: string | undefined, x: PCtx): { back: Shape[]; mid: Sh
       front.push(PA(`M ${f(cx)} ${f(cy - 6)} C ${f(cx + 30 + w)} ${f(cy - 30)} ${f(cx + 60 + w2)} ${f(cy + 10)} ${f(cx + 95 + w)} ${f(cy - 14 + w2 * 0.4)} L ${f(cx + 92 + w)} ${f(cy + 30)} C ${f(cx + 60 + w2)} ${f(cy + 36)} ${f(cx + 30 + w)} ${f(cy + 8)} ${f(cx)} ${f(cy + 8)} Z`, col, shade(col, 0.7), 2.5));
       break;
     }
+    case "thali": {
+      const cx = (hL[0] + hR[0]) / 2, cy = (hL[1] + hR[1]) / 2 - 2, fl = sin(ph * 6) * 2;
+      front.push(E(cx, cy + 4, 46, 9, "#b8860b"), E(cx, cy, 44, 8, "#f4c430"), E(cx, cy - 1, 36, 5, "#ffe08a"));
+      for (let i = 0; i < 4; i++) front.push(C(cx - 28 + i * 18, cy - 4 - (i % 2) * 2, 6, ["#ff9f1c", "#ff6b9d", "#ffd23f", "#e63946"][i]));
+      front.push(E(cx, cy - 6, 9, 4, "#c8742e"), PO([cx - 4, cy - 8, cx + fl, cy - 30, cx + 4, cy - 8], "#ffb703"), PO([cx - 2, cy - 8, cx + fl * 0.5, cy - 21, cx + 2, cy - 8], "#fff1a8"), C(cx, cy - 18, 22, "#ffd166", 0.2));
+      break;
+    }
+    case "arti": {
+      const px = hR[0], py = hR[1], fl = sin(ph * 7) * 3;
+      front.push(E(px, py + 4, 34, 7, "#b8860b"), E(px, py, 32, 6, "#f4c430"));
+      for (let i = -1; i <= 1; i++) front.push(E(px + i * 14, py - 5, 6, 3, "#c8742e"), PO([px + i * 14 - 3, py - 6, px + i * 14 + fl * 0.5, py - 24, px + i * 14 + 3, py - 6], "#ffb703"), C(px + i * 14, py - 14, 14, "#ffd166", 0.25));
+      const bx = hL[0], by = hL[1], sw = sin(ph * 8) * 6;
+      front.push(L(bx, by, bx + sw * 0.4, by - 14, 3, "#8a5a2b"), PA(`M ${f(bx + sw * 0.4 - 11)} ${f(by - 14)} q 11 -22 22 0 z`, "#e0b341"), C(bx + sw * 0.4, by - 11, 3, "#8a5a2b"));
+      for (let i = 0; i < 3; i++) { const t = (ph * 0.4 + i * 0.33) % 1; front.push(C(px + 20 + i * 8, py - 30 - t * 40, 5 + t * 6, "#fff", 0.5 * (1 - t))); }
+      break;
+    }
+    case "mic": { const mx = hR[0], my = hR[1]; front.push(L(mx, my + 6, mx + 3, my - 16, 8, "#3b3b44"), C(mx + 4, my - 24, 10, "#9aa0aa"), C(mx + 4, my - 24, 10, "#c7ccd6", 0.5), R(mx - 4, my - 4, 14, 5, "#e63946", 2)); break; }
+    case "fruit": {
+      const fx = hR[0], fy = hR[1];
+      front.push(E(fx, fy + 6, 30, 8, "#a9773e"), R(fx - 30, fy - 2, 60, 10, "#8a5a2b", 4), C(fx - 14, fy - 8, 11, "#e63946"), C(fx + 4, fy - 10, 11, "#ff9f1c"), C(fx + 20, fy - 7, 10, "#ffd23f"), E(fx - 4, fy - 18, 8, 5, "#3f9d4a"), L(fx - 14, fy - 18, fx - 12, fy - 24, 2, "#6e4426"));
+      break;
+    }
+    case "scale": {
+      const cx = (hL[0] + hR[0]) / 2, top = Math.min(hL[1], hR[1]) - 14, a = 0.14 * sin(ph * 1.5), bl = 52, ex = Math.cos(a) * bl, ey = Math.sin(a) * bl;
+      front.push(L(cx - ex, top - ey, cx + ex, top + ey, 5, "#6b7280"), C(cx, top, 6, "#9aa0aa"));
+      for (const sg of [-1, 1]) { const px = cx + sg * ex, py = top + sg * ey; front.push(L(px, py, px - 22, py + 44, 2, "#555"), L(px, py, px + 22, py + 44, 2, "#555"), E(px, py + 46, 26, 6, "#c7ccd6")); if (sg < 0) front.push(C(px - 8, py + 38, 9, "#e63946"), C(px + 8, py + 38, 9, "#ff9f1c"), C(px, py + 30, 9, "#ffd23f")); else front.push(R(px - 8, py + 34, 16, 12, "#555", 3)); }
+      break;
+    }
+    case "note": { const nx = hR[0], ny = hR[1], w = sin(ph * 3) * 2; front.push(R(nx - 16, ny - 10 + w, 34, 18, "#7ecb8a", 3), R(nx - 12, ny - 6 + w, 26, 10, "#a8e0b0", 2), C(nx + 1, ny - 1 + w, 4, "#4a9d5a")); break; }
+    case "bench": back.push(R(-86, -66, 172, 12, "#9b6a35", 4), R(-80, -54, 9, 54, "#5b3f24"), R(72, -54, 9, 54, "#5b3f24"), R(-86, -104, 172, 8, "#9b6a35", 3), R(-76, -96, 7, 30, "#5b3f24"), R(70, -96, 7, 30, "#5b3f24")); break;
     case "stool": back.push(R(-48, -64, 96, 13, "#a9773e", 5), R(-40, -52, 9, 52, "#8a5a2b"), R(31, -52, 9, 52, "#8a5a2b")); break;
     case "finger": { const dx = hR[0] - x.eR[0], dy = hR[1] - x.eR[1], n = Math.hypot(dx, dy) || 1; front.push(L(hR[0], hR[1], hR[0] + (dx / n) * 20, hR[1] + (dy / n) * 20, 7, d.skin)); break; }
     case "thumb": front.push(L(hR[0], hR[1] - 6, hR[0], hR[1] - 26, 8, d.skin), C(hR[0], hR[1] - 26, 4.5, d.skin)); break;
@@ -408,4 +446,14 @@ export const HUMANS: Record<string, HumanDef> = {
   elder: { skin: SK.e, hair: "#f2f2f2", hairStyle: "elder", top: "#f4efe0", top2: "#c9c2a8", bottom: "#3a5ba0", outfit: "panjabi", lower: "lungi", head: 1, shoe: "#7a4a21", extras: ["moustache", "glasses", "stick"] },
   farmer: { skin: SK.f, hair: "#1b1b1b", hairStyle: "none", top: "#8a8f98", bottom: "#d9d2b0", outfit: "vest", lower: "lungi", head: 1, shoe: "#7a4a21", extras: ["hat", "gamchha", "moustache"] },
   teacher: { skin: SK.b, hair: "#1b1b1b", hairStyle: "short", top: "#f5f5f5", bottom: "#4a4f5c", outfit: "shirt", lower: "pants", head: 1, shoe: "#222", extras: ["glasses", "tie", "book"] },
+  priest: { skin: SK.d, hair: "#1b1b1b", hairStyle: "tuft", top: "#f59e42", top2: "#ffffff", bottom: "#fffdf2", outfit: "vest", lower: "lungi", head: 1, shoe: "#7a4a21", extras: ["gamchha", "bindi"] },
+  fruit_seller: { skin: SK.f, hair: "#1b1b1b", hairStyle: "none", top: "#2a9d8f", bottom: "#4a4f5c", outfit: "shirt", lower: "pants", head: 1, shoe: "#7a4a21", extras: ["gamchha", "moustache"] },
+  veg_seller: { skin: SK.c, hair: "#1b1b1b", hairStyle: "bun", top: "#ff9f1c", top2: "#ffe08a", bottom: "#ff9f1c", outfit: "saree", lower: "none", head: 1, shoe: "#8a5a2b", extras: ["bindi"] },
+  fish_seller: { skin: SK.f, hair: "#1b1b1b", hairStyle: "none", top: "#4361ee", bottom: "#e8e2c8", outfit: "vest", lower: "lungi", head: 1, shoe: "#5b3f24", extras: ["hat", "moustache"] },
+  shopkeeper: { skin: SK.b, hair: "#2b2b2b", hairStyle: "short", top: "#f4a259", bottom: "#3b3f4a", outfit: "shirt", lower: "pants", head: 1, shoe: "#222", extras: ["glasses", "moustache"] },
+  customer: { skin: SK.a, hair: "#1b1b1b", hairStyle: "short", top: "#e63946", bottom: "#2a4d9b", outfit: "shirt", lower: "pants", head: 1, shoe: "#333", extras: [] },
+  customer_f: { skin: SK.d, hair: "#1b1b1b", hairStyle: "long", top: "#9b5de5", top2: "#f1c40f", bottom: "#9b5de5", outfit: "saree", lower: "none", head: 1, shoe: "#8a5a2b", extras: ["bindi"] },
+  singer: { skin: SK.a, hair: "#1b1b1b", hairStyle: "short", top: "#7b2cbf", top2: "#ffd23f", bottom: "#f5f5f5", outfit: "panjabi", lower: "pants", head: 1, shoe: "#333", extras: [] },
+  singer_f: { skin: SK.b, hair: "#1b1b1b", hairStyle: "long", top: "#e63946", top2: "#ffd23f", bottom: "#fff", outfit: "frock", lower: "none", head: 1, shoe: "#b5453a", extras: ["bindi"] },
+  bhakta: { skin: SK.e, hair: "#1b1b1b", hairStyle: "short", top: "#f4efe0", bottom: "#f4efe0", outfit: "panjabi", lower: "lungi", head: 1, shoe: "#7a4a21", extras: ["gamchha"] },
 };

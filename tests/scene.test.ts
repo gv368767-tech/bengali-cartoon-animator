@@ -6,9 +6,11 @@ import { BACKGROUNDS2 } from "../src/art/backgrounds2";
 const NEWBG = new Set(BACKGROUNDS2.map((b) => b.id));
 
 // ৫০টি অ্যাসেট
-const LEGACY = ASSETS.filter((a) => a.cat !== "hindu" && a.cat !== "style2").length + BACKGROUNDS.filter((b) => !NEWBG.has(b.id)).length;
+const NEWCATS = new Set(["hindu", "style2", "vehicle", "market", "temple", "stage"]);
+const NEWHUM = new Set(["priest", "fruit_seller", "veg_seller", "fish_seller", "shopkeeper", "customer", "customer_f", "singer", "singer_f", "bhakta"]);
+const LEGACY = ASSETS.filter((a) => !NEWCATS.has(a.cat) && !NEWHUM.has(a.id)).length + BACKGROUNDS.filter((b) => !NEWBG.has(b.id)).length;
 assert.equal(LEGACY, 50, "আগের ৫০টি অ্যাসেট অক্ষত");
-assert.equal(TOTAL_ASSETS, 50 + 18 + 13 + 22, "৫০ + ১৮ দেবদেবী/বাহন + ১৩ নতুন স্টাইল + ২২ নতুন পটভূমি");
+assert.equal(TOTAL_ASSETS, 50 + 18 + 13 + 22 + 10 + 10 + 6 + 8 + 5, "৫০ + ১৮ দেবদেবী/বাহন + ১৩ নতুন স্টাইল + ২২ নতুন পটভূমি + ১০ চরিত্র + ১০ যানবাহন + ৬ বাজার + ৮ মন্দির + ৫ মঞ্চ");
 assert.equal(BACKGROUNDS.length, 8 + 22);
 assert.ok(["bg_village","bg_city","bg_road","bg_school","bg_bazaar","bg_field","bg_river","bg_jungle"].every((id) => BACKGROUNDS.some((b) => b.id === id)), "আগের ৮টি পটভূমি অক্ষত");
 assert.equal(new Set(BACKGROUNDS.map((b) => b.id)).size, BACKGROUNDS.length, "পটভূমির id অনন্য");
@@ -104,7 +106,7 @@ const u = S.undo(h, 2)!; assert.equal(u.v, 1); assert.equal(S.redo(u.h, u.v)!.v,
 import { ANIMS, VIEWS, searchAnims } from "../src/art/anim";
 import { mouthAt, tokenize } from "../src/lib/lipsync";
 import { buildAsset } from "../src/lib/render";
-assert.equal(ANIMS.length, 31); // ৩০টি আগের + "আশীর্বাদ"
+assert.equal(ANIMS.length, 39); // ৩১টি আগের + ৮টি নতুন (প্রণাম, পুজো, আরতি, গান, বিক্রি, ওজন, টাকা দেওয়া, হাত ধরা)
 assert.equal(VIEWS.length, 5);
 for (const h of ASSETS.filter((a) => a.rig === "human")) {
   assert.equal(h.actions.length, ANIMS.length, "মানুষের সব অ্যানিমেশন নেই");

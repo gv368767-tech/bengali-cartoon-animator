@@ -4,12 +4,13 @@ import { HUMANS, humanShapes } from "./human";
 import { ANIMALS, quadShapes } from "./animal";
 import { BIRDS, birdShapes } from "./bird";
 import * as P from "./props";
+import * as V from "./vehicles";
 import { ANIMS } from "./anim";
 import { DEITY_LIST } from "./deity";
 import { BACKGROUNDS } from "./backgrounds";
 import { SPRITE_LIST, spriteShapes } from "./sprite";
 
-export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu" | "style2";
+export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu" | "style2" | "vehicle" | "temple" | "market" | "stage";
 export type AssetDef = {
   id: string; name: string; cat: Cat;
   layer: "back" | "ground";           // back = সূর্য/মেঘ/পাহাড় (গভীরতা-স্কেল নেই)
@@ -52,6 +53,9 @@ const prop = (id: string, name: string, cat: Cat, b: [number, number, number, nu
   id, name, cat, layer: "ground", scale: 1, defaultY: 600, actions: ["stand"], defaultAction: "stand", shadow: 0, side: false, talk: false, bounds: b, build, ...o,
 });
 
+const veh = (id: string, name: string, build: (p: Pose) => Shape[], w: number, top = 190): AssetDef => prop(id, name, "vehicle", [-w - 20, -top, w + 30, 8], build, { actions: ["stand", "walk"], side: true, shadow: w, scale: 1 });
+const mk = (id: string, name: string, build: (p: Pose) => Shape[], b: [number, number, number, number], o: Partial<AssetDef> = {}): AssetDef => prop(id, name, o.cat ?? "market", b, build, o);
+
 export const ASSETS: AssetDef[] = [
   // প্রকৃতি
   prop("tree", "গাছ", "nature", [-130, -320, 130, 8], P.tree, { shadow: 60, scale: 0.9 }),
@@ -90,6 +94,28 @@ export const ASSETS: AssetDef[] = [
   prop("train", "খেলনা ট্রেন", "object", [-135, -115, 135, 8], P.toyTrain, { actions: ["stand", "walk"], shadow: 120, side: true }),
   prop("lattu", "লাটিম", "object", [-35, -100, 35, 8], P.lattu, { actions: ["stand", "dance"], shadow: 22, scale: 1.2 }),
   prop("umbrella", "ছাতা", "object", [-95, -215, 95, 8], P.umbrella, { shadow: 0 }),
+  // নতুন চরিত্র (পুজো, বাজার, গান)
+  human("priest", "পুরোহিত", 1.1, -330), human("fruit_seller", "ফল বিক্রেতা", 1.1, -330), human("veg_seller", "সবজি বিক্রেতা", 1.05, -330), human("fish_seller", "মাছ বিক্রেতা", 1.1, -330),
+  human("shopkeeper", "দোকানদার", 1.1, -330), human("customer", "ক্রেতা (পুরুষ)", 1.05, -330), human("customer_f", "ক্রেতা (মহিলা)", 1.05, -330),
+  human("singer", "গায়ক", 1.05, -330), human("singer_f", "গায়িকা", 1.05, -330), human("bhakta", "ভক্ত (বৃদ্ধ)", 1.05, -320),
+  // যানবাহন (চালকসহ)
+  veh("ride_cycle_boy", "সাইকেল চালক ছেলে", V.cycleRider("boy"), 100), veh("ride_cycle_girl", "সাইকেল চালক মেয়ে", V.cycleRider("girl"), 100),
+  veh("ride_scooty_girl", "স্কুটি চালক মেয়ে", V.scootyRider("girl", "#e63946"), 100), veh("ride_scooty_boy", "স্কুটি চালক ছেলে", V.scootyRider("boy", "#2a9d8f"), 100),
+  veh("ride_bike_boy", "মোটরসাইকেল চালক ছেলে", V.motoRider("boy", "#d62828"), 110), veh("ride_bike_man", "মোটরসাইকেল চালক পুরুষ", V.motoRider("man", "#1d3557"), 110),
+  veh("auto", "অটো (চালকসহ)", V.autoDriver, 125, 200), veh("car_driver", "গাড়ি (চালকসহ)", V.carDriver, 120), veh("bus_driver", "বাস (চালকসহ)", V.busDriver, 155), veh("truck", "ট্রাক (চালকসহ)", V.truck, 175, 160),
+  // বাজার
+  mk("fruit_van", "ফলের ভ্যান", V.fruitVan, [-125, -125, 155, 8], { actions: ["stand", "walk"], side: true, shadow: 130 }), mk("handcart", "ঠেলাগাড়ি (ফল)", V.handcart, [-105, -150, 145, 8], { actions: ["stand", "walk"], side: true, shadow: 90 }),
+  mk("fruit_stall", "ফলের দোকান", () => V.fruitStall(), [-145, -205, 145, 8], { shadow: 130 }), mk("veg_basket", "সবজির ঝুড়ি", () => V.veggieBasket(), [-55, -80, 55, 8], { shadow: 40 }),
+  mk("fish_tray", "মাছের ট্রে", () => V.fishTray(), [-75, -60, 75, 8], { shadow: 60 }), mk("scale", "দাঁড়িপাল্লা", () => V.weighScale(), [-90, -130, 90, 8], { shadow: 55 }),
+  // মন্দির
+  mk("t_diya", "প্রদীপ", V.diyaProp, [-30, -60, 30, 8], { cat: "temple" }), mk("t_bell", "মন্দিরের ঘণ্টা", V.bellProp, [-60, -240, 60, 8], { cat: "temple", layer: "back", defaultY: 300 }),
+  mk("t_incense", "ধূপ", V.incense, [-35, -170, 35, 8], { cat: "temple" }), mk("t_thali", "পুজোর থালা", () => V.thaliProp(), [-50, -40, 50, 8], { cat: "temple" }),
+  mk("t_altar", "বেদি ও বিগ্রহ", V.altar, [-115, -250, 115, 8], { cat: "temple", shadow: 100 }), mk("t_asana", "আসন", () => V.asana(), [-65, -20, 65, 8], { cat: "temple" }),
+  mk("t_harmonium", "হারমোনিয়াম", () => V.harmonium(), [-70, -80, 70, 8], { cat: "temple", shadow: 55 }), mk("t_garland", "ফুলের মালা", () => V.flowerGarland(), [-100, -125, 100, 8], { cat: "temple" }),
+  // মঞ্চ
+  mk("s_stage", "মঞ্চ", () => V.stage(), [-195, -255, 195, 8], { cat: "stage", shadow: 0 }), mk("s_mic", "মাইক স্ট্যান্ড", () => V.micStand(), [-30, -185, 30, 8], { cat: "stage", shadow: 20 }),
+  mk("s_speaker", "স্পিকার", () => V.speaker(), [-40, -125, 40, 8], { cat: "stage", shadow: 35 }), mk("s_tabla", "তবলা", () => V.tabla(), [-55, -80, 55, 8], { cat: "stage", shadow: 45 }),
+  mk("s_bench", "বেঞ্চ (দর্শক)", () => V.bench(), [-95, -115, 95, 8], { cat: "stage", shadow: 80 }),
 ];
 
 export const BG_ASSETS = BACKGROUNDS;
@@ -98,5 +124,5 @@ export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? vid
 export const TOTAL_ASSETS = ASSETS.length + BACKGROUNDS.length;
 export const CATS: { id: Cat; name: string }[] = [
   { id: "bg", name: "ব্যাকগ্রাউন্ড" }, { id: "human", name: "মানুষ" }, { id: "animal", name: "প্রাণী" },
-  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" }, { id: "style2", name: "নতুন স্টাইল" },
+  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" }, { id: "vehicle", name: "যানবাহন" }, { id: "market", name: "বাজার" }, { id: "temple", name: "মন্দির ও পুজো" }, { id: "stage", name: "মঞ্চ ও গান" }, { id: "style2", name: "নতুন স্টাইল" },
 ];

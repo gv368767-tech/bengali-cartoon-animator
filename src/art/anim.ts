@@ -1,10 +1,10 @@
 // মানুষের অ্যানিমেশন তালিকা (প্যানেল ও সার্চের জন্য) + পাঁচটি ভিউ
 import type { Action, View } from "./shapes";
 
-export type AnimCat = "basic" | "gesture" | "emotion" | "work";
+export type AnimCat = "basic" | "gesture" | "emotion" | "work" | "devotion" | "market" | "stage";
 export type AnimDef = { id: Exclude<Action, "auto" | "fly">; bn: string; en: string; cat: AnimCat; kw: string[] };
 export const ANIM_CATS: { id: AnimCat | "all"; bn: string }[] = [
-  { id: "all", bn: "সব" }, { id: "basic", bn: "মৌলিক" }, { id: "gesture", bn: "অঙ্গভঙ্গি" }, { id: "emotion", bn: "আবেগ" }, { id: "work", bn: "কাজ" },
+  { id: "all", bn: "সব" }, { id: "basic", bn: "মৌলিক" }, { id: "gesture", bn: "অঙ্গভঙ্গি" }, { id: "emotion", bn: "আবেগ" }, { id: "work", bn: "কাজ" }, { id: "devotion", bn: "পূজা-ভক্তি" }, { id: "market", bn: "বাজার" }, { id: "stage", bn: "গান-নাচ" },
 ];
 export const ANIMS: AnimDef[] = [
   { id: "stand", bn: "দাঁড়ানো", en: "Idle", cat: "basic", kw: ["অপেক্ষা", "স্থির", "wait", "stand"] },
@@ -38,6 +38,14 @@ export const ANIMS: AnimDef[] = [
   { id: "eat", bn: "খাওয়া", en: "Eating", cat: "work", kw: ["খাবার", "ভাত", "meal"] },
   { id: "drink", bn: "পানি পান", en: "Drinking", cat: "work", kw: ["পান", "জল", "water", "cup"] },
   { id: "phone", bn: "ফোনে কথা", en: "Phone Call", cat: "work", kw: ["মোবাইল", "call", "ফোন"] },
+  { id: "pranam", bn: "প্রণাম", en: "Pranam", cat: "devotion", kw: ["নত হয়ে প্রণাম", "হাত জোড়", "pray", "worship"] },
+  { id: "pooja", bn: "পূজা (প্রদীপ-থালা)", en: "Puja", cat: "devotion", kw: ["পূজা", "প্রদীপ", "ফুল", "নৈবেদ্য", "puja", "offering"] },
+  { id: "arti", bn: "আরতি", en: "Aarti", cat: "devotion", kw: ["আরতি", "প্রদীপ ঘোরানো", "ঘণ্টা", "aarti"] },
+  { id: "sing", bn: "গান (মাইক্রোফোন)", en: "Singing", cat: "stage", kw: ["গান", "গাওয়া", "মাইক", "ভজন", "sing", "mic"] },
+  { id: "sell", bn: "বিক্রি করা", en: "Selling", cat: "market", kw: ["বিক্রেতা", "ফল", "দোকান", "sell", "seller"] },
+  { id: "weigh", bn: "ওজন করা", en: "Weighing", cat: "market", kw: ["দাঁড়িপাল্লা", "ওজন", "scale", "weigh"] },
+  { id: "pay", bn: "টাকা দেওয়া", en: "Paying", cat: "market", kw: ["কেনা", "দাম", "টাকা", "buy", "pay", "money"] },
+  { id: "holdhand", bn: "হাত ধরে বসা", en: "Hold Hands", cat: "gesture", kw: ["হাত ধরা", "গল্প", "দুজন", "couple", "together"] },
 ];
 export const VIEWS: { id: View; bn: string; en: string }[] = [
   { id: "front", bn: "সামনে", en: "FRONT" }, { id: "q_front", bn: "৩/৪ সামনে", en: "3/4 FRONT" },
