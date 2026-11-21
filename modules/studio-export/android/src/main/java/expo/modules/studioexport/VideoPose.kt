@@ -327,7 +327,8 @@ object VideoPose {
         for (i in pick) {
           val p = t.getJSONArray(i); val bmp = frameAt(r, i * 1000L / fps, 540) ?: continue
           val W = bmp.width; val H = bmp.height
-          fun X(j: Int) = p.getDouble(j * 3); fun Y(j: Int) = p.getDouble(j * 3 + 1)
+          fun X(j: Int) = p.getDouble(j * 3)
+          fun Y(j: Int) = p.getDouble(j * 3 + 1)
           fun patch(cx: Double, cy: Double, rx: Double): Array<IntArray> {          // rx = চওড়ার ভগ্নাংশ
             val x0 = ((cx - rx) * W).toInt().coerceIn(0, W - 1); val x1 = ((cx + rx) * W).toInt().coerceIn(x0 + 1, W)
             val ry = rx * W / H; val y0 = ((cy - ry) * H).toInt().coerceIn(0, H - 1); val y1 = ((cy + ry) * H).toInt().coerceIn(y0 + 1, H)
