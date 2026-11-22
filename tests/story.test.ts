@@ -62,3 +62,14 @@ import { shapesToSvg } from "../src/art/svg";
   console.log("✅ পটভূমি জুম টেস্ট পাস");
 }
 function await_bgs() { return require("../src/art/backgrounds").BACKGROUNDS as { id: string; shapes: any[] }[]; }
+
+// গণেশের জন্মকথা (পর্ব ১): বক্তা ঠিক বসছে কি
+import { readFileSync } from "node:fs";
+{
+  const gp = planStory(readFileSync(__dirname + "/fixtures/ganesh1.txt", "utf8"));
+  const nm = Object.fromEntries(gp.chars.map((c) => [c.id, c.name]));
+  const who = gp.scenes.flatMap((s) => s.units).filter((u) => u.kind === "say").map((u: any) => nm[u.who]);
+  assert.deepEqual(who, ["দুর্গা", "গণেশ", "দুর্গা", "গণেশ", "গণেশ", "শিব", "গণেশ", "দুর্গা", "শিব", "শিব"]);
+  assert.deepEqual(gp.chars.map((c) => c.role.asset), ["shiva", "durga", "ganesha", "elephant"]);
+  console.log("✅ গণেশ পর্ব ১ বক্তা-মিল পাস");
+}

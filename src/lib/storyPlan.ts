@@ -146,16 +146,22 @@ export function planStory(raw: string): StoryPlan {
   const mentioned = (s: string): string[] => {
     const out: string[] = [];
     for (const t of tokens(s)) { const raw = variants(t);
-      if (raw.some((v) => GROUP.includes(v))) { for (const c of chars.slice(0, 4)) if (!out.includes(c.id)) out.push(c.id); continue; } const nm = [...names.keys()].find((n) => raw.includes(n.toLowerCase())); if (nm) { const id = names.get(nm)!; if (!out.includes(id)) out.push(id); continue; }
+      if (raw.some((v) => GROUP.includes(v))) { for (const c of chars.filter((x) => x.role.voice !== "animal").slice(0, 4)) if (!out.includes(c.id)) out.push(c.id); continue; } const nm = [...names.keys()].find((n) => raw.includes(n.toLowerCase())); if (nm) { const id = names.get(nm)!; if (!out.includes(id)) out.push(id); continue; }
       if (STOP.has(t)) continue; const r = roleOfToken(t); if (r) { const c = byRole(r); if (!out.includes(c.id)) out.push(c.id); } }
     return out;
   };
   const segs = segments(text);
   segs.forEach((seg, si) => {
     if (seg.quote) {
-      const near = [segs[si - 1]?.text.split(/[।.!?]/).filter(Boolean).pop() ?? "", (segs[si + 1]?.text ?? "").split(/[।.!?]/)[0]];
+      // বক্তা-নির্দেশক বাক্য: কমা/কোলনে শেষ হলে পরের উদ্ধৃতির, "।" ইত্যাদিতে শেষ হলে আগের উদ্ধৃতির
+      const prevT = segs[si - 1] && !segs[si - 1].quote ? segs[si - 1].text : "", nextT = segs[si + 1] && !segs[si + 1].quote ? segs[si + 1].text : "";
+      const lastFrag = (prevT.split(/[।.!?]/).pop() ?? "").trim();
+      const prevOwns = /[,:]\s*$/.test(prevT.trim()) && lastFrag.length > 0;
+      const nextOwns = !(/[,:]\s*$/.test(nextT.trim()) && !/[।.!?]/.test(nextT));
+      const cands: string[] = []; if (prevOwns) cands.push(lastFrag); if (nextOwns) cands.push(nextT.split(/[।.!?]/)[0]); if (!prevOwns) cands.push(lastFrag);
       let who: string | null = null;
-      for (const ctx of [near[1], near[0]]) { if (hasStem(norm(ctx), SPEECH) || wordsIn(norm(ctx).toLowerCase(), SPEECH)) { const ids = mentioned(ctx); if (ids.length) { who = ids[0]; break; } if (ctx === near[0] && last) { who = last; break; } } }
+      for (const ctx of cands) { if (hasStem(norm(ctx), SPEECH) || wordsIn(norm(ctx).toLowerCase(), SPEECH)) { const vi = SPEECH.map((w) => norm(ctx).indexOf(w)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? ctx.length;
+        const before = mentioned(norm(ctx).slice(0, vi)); const ids = before.length ? [before[before.length - 1]] : mentioned(ctx); if (ids.length) { who = ids[0]; break; } if (ctx === lastFrag && last) { who = last; break; } } }
       if (!who) { const others = chars.map((c) => c.id).filter((i) => i !== last); who = others.length ? (prev && prev !== last && others.includes(prev) ? prev : others[0]) : last; }
       if (!who) who = byRole(ROLE_WORDS.find((r) => r[1].key === "boy")![1]).id;
       prev = last; last = who;
@@ -169,6 +175,7 @@ export function planStory(raw: string): StoryPlan {
       if (skip) continue;
       // শুধু বক্তা-নির্দেশক বাক্য ("... বলল টুকাই।") — আলাদা দৃশ্য নয়
       if (hasStem(s, SPEECH) && !actionOf(s.replace(/বল[^\s]*|জিজ্ঞ[^\s]*|চেঁচ[^\s]*/gu, "")) && !bgOf(s) && segs[si - 1]?.quote && s.length < 40) { if (ids[0]) { prev = last; last = ids[0]; } continue; }
+      if (segs[si + 1]?.quote && /[,:]\s*$/.test(seg.text.trim()) && s === sentences(seg.text).pop() && (hasStem(s, SPEECH) || wordsIn(norm(s).toLowerCase(), SPEECH) || hasStem(s, ["ভাবল", "ভাবলেন"]))) { if (ids[0]) { prev = last; last = ids[0]; } continue; }
       const ride = rideOf(s); const act = ride ? "walk" : actionOf(s);
       if (ids.length) { prev = last; last = ids[0]; }
       const chs = ids.length ? ids : last ? [last] : [];
