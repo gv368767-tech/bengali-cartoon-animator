@@ -30,12 +30,12 @@ export async function pickAudio(): Promise<PickedAudio | null> {
 }
 
 /** লেখা থেকে বাংলা ভয়েস ফাইল তৈরি (ফোনের অফলাইন ইঞ্জিন) */
-export async function makeVoice(text: string, rate = 0.95, pitch = 1): Promise<{ uri: string; dur: number }> {
+export async function makeVoice(text: string, rate = 0.95, pitch = 1, variant = 0): Promise<{ uri: string; dur: number }> {
   if (!StudioExport) throw new Error("ভয়েস তৈরি শুধু ইনস্টল করা APK-তে কাজ করে");
   await ensure();
   const dest = DIR + "voice_" + stamp() + ".wav";
   try {
-    const r = await StudioExport.synthesizeVoice(text, strip(dest), rate, pitch);
+    const r = await StudioExport.synthesizeVoice(text, strip(dest), rate, pitch, variant);
     setEnvelope(dest, r.envelope);
     return { uri: dest, dur: Math.max(0.5, Math.round(r.durationMs / 100) / 10) };
   } catch (e: any) {

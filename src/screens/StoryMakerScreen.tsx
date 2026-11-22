@@ -26,7 +26,7 @@ export default function StoryMakerScreen({ onBack, onOpen }: { onBack: () => voi
     setBusy(true); setPct(0); cancel.current = false;
     try {
       const r = await buildStoryMovie(ok, title.trim() || "আমার গল্প", {
-        seconds: mins * 60, music, musicVol: vol, voices, narrate, makeVoice: (t, rate, pitch) => makeVoice(t, rate, pitch),
+        seconds: mins * 60, music, musicVol: vol, voices, narrate, makeVoice: (t, rate, pitch, variant) => makeVoice(t, rate, pitch, variant),
         sfx: async (id) => { try { const d = SFX[id as SfxId]; return d ? { uri: await sfxFile(id as SfxId), dur: d.dur, name: d.name } : null; } catch { return null; } },
         progress: (p, t) => { setPct(p); setMsg(t); }, cancelled: () => cancel.current,
       });

@@ -22,7 +22,7 @@ assert.throws(() => planStory("   "));
 
 (async () => {
   for (const sec of [60, 180, 300]) {
-    const r = await buildStoryMovie(p, "টেস্ট", { seconds: sec, music: true, musicVol: 0.3, narrate: true, voices: true, makeVoice: async (t) => ({ uri: "file:///x.wav", dur: Math.max(0.8, t.length * 0.07) }), sfx: async () => ({ uri: "file:///s.wav", dur: 0.5, name: "sfx" }) });
+    const r = await buildStoryMovie(p, "টেস্ট", { seconds: sec, music: true, musicVol: 0.3, narrate: true, voices: true, makeVoice: async (t: string) => ({ uri: "file:///x.wav", dur: Math.max(0.8, t.length * 0.07) }), sfx: async () => ({ uri: "file:///s.wav", dur: 0.5, name: "sfx" }) });
     const dur = activeDuration(r.movie);
     assert.equal(dur, r.seconds); assert.ok(dur <= sec + 3 && dur > 20, `dur ${dur} for ${sec}`);
     assert.equal(r.movie.music, "happy"); assert.equal(r.movie.scenes.length, 4);
@@ -37,7 +37,7 @@ assert.throws(() => planStory("   "));
   assert.equal(mute.movie.music, null);
   // বড় গল্প ৫ মিনিটে ছাঁটা
   const long = planStory(Array(40).fill(S).join("\n"));
-  const lr = await buildStoryMovie(long, "l", { seconds: 300, music: true, musicVol: 0.3, narrate: true, voices: true, makeVoice: async (t) => ({ uri: "f", dur: t.length * 0.07 }) });
+  const lr = await buildStoryMovie(long, "l", { seconds: 300, music: true, musicVol: 0.3, narrate: true, voices: true, makeVoice: async (t: string) => ({ uri: "f", dur: t.length * 0.07 }) });
   assert.ok(lr.seconds <= 305, "৫ মিনিটের বেশি নয়: " + lr.seconds); assert.ok(lr.notes.some((n) => n.includes("বাদ")));
   console.log("✅ Story Maker টেস্ট পাস; দীর্ঘ গল্প:", lr.seconds, "s");
 })();

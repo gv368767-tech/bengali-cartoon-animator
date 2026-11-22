@@ -22,7 +22,7 @@ export type StudioExportNative = {
   cartoonFrames(path: string, start: number, count: number, fps: number, levels: number): Promise<number>;
   cartoonReset(): Promise<null>;
   analyzeAudio(path: string, fps: number): Promise<{ durationMs: number; envelope: number[] }>;
-  synthesizeVoice(text: string, outPath: string, rate: number, pitch: number): Promise<{ path: string; durationMs: number; envelope: number[] }>;
+  synthesizeVoice(text: string, outPath: string, rate: number, pitch: number, variant: number): Promise<{ path: string; durationMs: number; envelope: number[] }>;
 };
 
 let native: StudioExportNative | null = null;

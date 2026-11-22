@@ -55,9 +55,9 @@ class StudioExportModule : Module() {
     }
 
     // লেখা থেকে বাংলা ভয়েস ফাইল (ফোনের নিজস্ব অফলাইন ইঞ্জিনে)
-    AsyncFunction("synthesizeVoice") { text: String, outPath: String, rate: Double, pitch: Double ->
+    AsyncFunction("synthesizeVoice") { text: String, outPath: String, rate: Double, pitch: Double, variant: Int ->
       val f = File(outPath.removePrefix("file://"))
-      val err = TtsSynth.synthesizeOne(context().applicationContext, text, f, rate.toFloat(), pitch.toFloat())
+      val err = TtsSynth.synthesizeOne(context().applicationContext, text, f, rate.toFloat(), pitch.toFloat(), variant)
       if (err != null) throw Exception(err)
       val a = AudioMixer.analyze(f.absolutePath, 20)
       mapOf("path" to f.absolutePath, "durationMs" to (a?.first ?: 0L).toInt(), "envelope" to (a?.second?.map { (Math.round(it * 100f) / 100f).toDouble() } ?: emptyList<Double>()))

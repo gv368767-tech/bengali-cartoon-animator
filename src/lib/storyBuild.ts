@@ -4,12 +4,14 @@ import { getAsset } from "../art/registry";
 import type { Action } from "../art/shapes";
 import type { Char, Ride, StoryPlan, Unit } from "./storyPlan";
 
-export type VoiceFn = (text: string, rate: number, pitch: number) => Promise<{ uri: string; dur: number }>;
+export type VoiceFn = (text: string, rate: number, pitch: number, variant: number) => Promise<{ uri: string; dur: number }>;
 export type SfxFn = (id: string) => Promise<{ uri: string; dur: number; name: string } | null>;
 export type BuildOpts = { seconds: number; music: boolean; musicVol: number; narrate: boolean; voices: boolean; makeVoice?: VoiceFn; sfx?: SfxFn; progress?: (p: number, msg: string) => void; cancelled?: () => boolean };
 export type BuildResult = { movie: Movie; seconds: number; notes: string[]; scenes: number; voiced: number };
 
-const PITCH: Record<string, number> = { boy: 1.15, girl: 1.45, kid: 1.65, man: 0.85, woman: 1.25, elder: 0.7, elderF: 0.95, deity: 0.8, animal: 1.0 };
+// বেশি পিচ-বদল কণ্ঠ বিকৃত করে, তাই কম রেঞ্জ; আলাদা স্বর মূলত আলাদা ইনস্টল-করা কণ্ঠ (variant) থেকে আসে
+const PITCH: Record<string, number> = { boy: 1.08, girl: 1.18, kid: 1.3, man: 0.92, woman: 1.08, elder: 0.86, elderF: 1.0, deity: 0.9, animal: 1.0 };
+const VARIANT: Record<string, number> = { boy: 0, man: 0, elder: 0, deity: 0, animal: 0, girl: 1, woman: 1, kid: 1, elderF: 1 };
 export const MAX_SECONDS = 300;
 
 const RIDE_ASSET = (r: Ride, role: string): string => {
@@ -38,8 +40,8 @@ export async function buildStoryMovie(plan: StoryPlan, name: string, o: BuildOpt
       stop(); const u = units[i]; if (u.kind === "narr" && !o.narrate) continue;
       prog(0.05 + 0.5 * (i / units.length), `ভয়েস তৈরি: ${i + 1}/${units.length}`);
       try {
-        const pitch = u.kind === "say" ? PITCH[chById.get(u.who)?.role.voice ?? "boy"] : 1.0;
-        voice.set(u, await o.makeVoice(u.text, u.kind === "say" ? 0.95 : 0.9, pitch)); voiced++;
+        const vk = u.kind === "say" ? chById.get(u.who)?.role.voice ?? "boy" : "";
+        voice.set(u, await o.makeVoice(u.text.replace(/[“”"‘’«»]/g, "").replace(/\s*[-–—]\s*/g, ", "), u.kind === "say" ? 0.92 : 0.88, vk ? PITCH[vk] : 1.0, vk ? VARIANT[vk] : 0)); voiced++;
       } catch (e: any) { vErr = String(e?.message ?? e); break; }
     }
     if (vErr) notes.push("ভয়েস তৈরি হয়নি, তাই ভিডিও নিঃশব্দ সংলাপসহ (ডায়ালগ বাবল)। কারণ: " + vErr);

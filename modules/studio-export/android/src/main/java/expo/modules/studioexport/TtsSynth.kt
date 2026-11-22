@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -48,7 +49,7 @@ object TtsSynth {
   }
 
   /** একটি লেখা থেকে একটি WAV ফাইল (ব্যবহারকারীর "ভয়েস তৈরি" বাটন)। সফল হলে ফাইল, না হলে ব্যর্থতার কারণ-কোড। */
-  fun synthesizeOne(ctx: Context, text: String, out: File, rate: Float, pitch: Float): String? {
+  fun synthesizeOne(ctx: Context, text: String, out: File, rate: Float, pitch: Float, variant: Int = 0): String? {
     var ok = false
     val ready = CountDownLatch(1)
     val tts = TextToSpeech(ctx) { status -> ok = status == TextToSpeech.SUCCESS; ready.countDown() }
@@ -59,6 +60,12 @@ object TtsSynth {
       if (r == TextToSpeech.LANG_AVAILABLE || r == TextToSpeech.LANG_COUNTRY_AVAILABLE || r == TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE) { set = true; break }
     }
     if (!set) { tts.shutdown(); return "tts_no_bengali" }
+    // ফোনে একাধিক বাংলা কণ্ঠ থাকলে: অফলাইন ও সর্বোচ্চ মানেরটা আগে; চরিত্রভেদে (variant) আলাদা কণ্ঠ
+    try {
+      val bn = tts.voices?.filter { it.locale.language == "bn" && it.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true }
+        ?.sortedWith(compareBy<Voice>({ it.isNetworkConnectionRequired }, { -it.quality }, { it.name }))
+      if (!bn.isNullOrEmpty()) tts.voice = bn[((variant % bn.size) + bn.size) % bn.size]
+    } catch (_: Throwable) { /* ডিফল্ট কণ্ঠই চলবে */ }
     tts.setSpeechRate(rate.coerceIn(0.4f, 2f)); tts.setPitch(pitch.coerceIn(0.5f, 2f))
     out.parentFile?.mkdirs()
     if (out.exists()) out.delete()

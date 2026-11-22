@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bengali Cartoon Studio",
     "slug": "bengali-cartoon-studio",
-    "version": "2.9.0",
+    "version": "2.9.1",
     "orientation": "portrait",
     "splash": {
       "image": "./assets/splash.png",
@@ -14,7 +14,7 @@
     ],
     "android": {
       "package": "com.bengalicartoon.animator",
-      "versionCode": 19,
+      "versionCode": 20,
       "backgroundColor": "#15171c",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
