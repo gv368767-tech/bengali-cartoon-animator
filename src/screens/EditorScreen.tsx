@@ -17,6 +17,7 @@ import { pauseMusic, playClip, playMusic, speak, stopClips, stopMusic, stopSpeec
 import { ensureEnvelopes, makeVoice, pickAudio } from "../lib/audioFiles";
 import { exportAvailable, exportMovie, Quality, saveToGallery } from "../lib/exporter";
 import { ACTION_BN, C } from "../lib/theme";
+import { DEFAULT_VIEW, isDefaultView, panStep, zoomStep } from "../lib/bgZoom";
 import type { Action, View as ViewT } from "../art/shapes";
 import { animName } from "../art/anim";
 
@@ -62,17 +63,21 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
     if (!playing) return;
     let raf = 0, last = Date.now();
     { const mv0 = R.current.movie; const mu = mv0.musicClip?.uri ?? mv0.music; if (mu) playMusic(mu, mv0.musicVol ?? (mv0.musicClip ? 0.5 : 0.35)).catch(() => {}); }
+    // সময় আলাদা ভেরিয়েবলে জমে; স্ক্রিন-আপডেট (React রি-রেন্ডার) অনেক বস্তু থাকলে ~৩০ ফ্রেম/সেকেন্ডে সীমিত — এতে JS থ্রেড ঠাসা হয়ে অ্যানিমেশন ধীর/ঝাঁকুনি হয় না
+    let tt = R.current.t, lastDraw = 0;
     const tick = () => {
       const now = Date.now(), dt = (now - last) / 1000; last = now;
-      const { scene: sc, t: cur, si: idx, movie: mv } = R.current;
-      let nt = cur + dt;
+      const { scene: sc, si: idx, movie: mv } = R.current;
+      const cur = tt; let nt = cur + dt;
       for (const d of sc.dialogues) if (nt >= d.t && cur < d.t + 0.001 && !spoken.current.has(d.id)) { spoken.current.add(d.id); if (d.voiceUri) playClip(d.voiceUri, 1); else speak(d.text); }
       for (const c of sc.clips ?? []) if (nt >= c.t && cur < c.t + 0.001 && !spoken.current.has(c.id)) { spoken.current.add(c.id); playClip(c.uri, c.vol); }
       if (nt >= sc.duration) {
-        if (idx < mv.scenes.length - 1) { setSi(idx + 1); nt = 0; spoken.current.clear(); }
+        if (idx < mv.scenes.length - 1) { setSi(idx + 1); nt = 0; tt = 0; spoken.current.clear(); setT(0); lastDraw = now; raf = requestAnimationFrame(tick); return; }
         else { setT(sc.duration); stopAll(); return; }
       }
-      setT(nt);
+      tt = nt;
+      const heavy = sc.objects.length >= 3;
+      if (!heavy || now - lastDraw >= 30) { lastDraw = now; setT(nt); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -210,6 +215,8 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
   const dlgName = dlg ? (() => { const o = scene.objects.find((x) => x.id === dlg.objId); const cm = o?.castId ? movie.cast.find((c) => c.id === o.castId) : null; return cm?.name ?? ""; })() : "";
   const actions: Action[] = selAsset ? (["auto", ...selAsset.actions] as Action[]) : [];
 
+  const bgv = scene.bgView ?? DEFAULT_VIEW;
+  const setBgView = (v: typeof DEFAULT_VIEW) => commit((m) => updateScene(m, scene.id, (sc) => ({ ...sc, bgView: isDefaultView(v) ? undefined : v })));
   return (
     <View style={s.root}>
       {/* উপরের বার */}
@@ -297,6 +304,20 @@ export default function EditorScreen({ initial, onBack }: { initial: Movie; onBa
             <Btn label="⏱ টাইমলাইন" onPress={() => { stopAll(); setSheet("timeline"); }} />
             <Btn label="⏱ −" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration - 1))} />
             <Btn label="⏱ ＋" onPress={() => commit((m) => setDuration(m, scene.id, scene.duration + 1))} />
+          </View>
+        </View>
+
+        {/* পটভূমি জুম/সরানো */}
+        <View style={[s.card, { width: stageW }]}>
+          <Text style={s.cardTitle}>পটভূমি জুম <Text style={s.dimTxt}>· {(scene.bgView?.z ?? 1).toFixed(2)}×</Text></Text>
+          <View style={s.wrap}>
+            <Btn label="🔍＋ জুম ইন" onPress={() => setBgView(zoomStep(bgv, 0.25))} />
+            <Btn label="🔍− জুম আউট" onPress={() => setBgView(zoomStep(bgv, -0.25))} />
+            <Btn label="⬆ উপরে" onPress={() => setBgView(panStep(bgv, 0, 60))} />
+            <Btn label="⬇ নিচে" onPress={() => setBgView(panStep(bgv, 0, -60))} />
+            <Btn label="⬅ বামে" onPress={() => setBgView(panStep(bgv, 60, 0))} />
+            <Btn label="➡ ডানে" onPress={() => setBgView(panStep(bgv, -60, 0))} />
+            <Btn label="↺ রিসেট" onPress={() => setBgView(DEFAULT_VIEW)} />
           </View>
         </View>
 

@@ -33,7 +33,7 @@ export function xf(S: Shape[], k: number, dx: number, dy: number): Shape[] {
       case "line": return { ...s, x1: s.x1 * k + dx, y1: s.y1 * k + dy, x2: s.x2 * k + dx, y2: s.y2 * k + dy, w: s.w * k };
       case "path": return { ...s, d: xfPath(s.d, k, dx, dy), sw: s.sw ? s.sw * k : s.sw };
       case "poly": return { ...s, pts: s.pts.map((v, i) => v * k + (i % 2 ? dy : dx)) };
-      case "img": return { ...s, x: s.x * k + dx, y: s.y * k + dy, w: s.w * k, h: s.h * k };
+      case "img": return { ...s, e: s.e * k + dx, f: s.f * k + dy, s: s.s * k };   // ছবির আকার: বাইরের রূপান্তর e,f,s-এ
       default: return { ...s, x: s.x * k + dx, y: s.y * k + dy, w: s.w * k, h: s.h * k };
     }
   });

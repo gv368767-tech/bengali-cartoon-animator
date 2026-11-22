@@ -19,7 +19,7 @@ export type Dialogue = { id: string; objId: string; t: number; dur: number; text
 export type AudioKind = "sfx" | "voice";
 export type AudioClip = { id: string; kind: AudioKind; name: string; uri: string; t: number; dur: number; vol: number; objId?: string };
 // skip: জোড়ার সময় বাদ; fade: দৃশ্যের শেষে ফেড-আউট/পরেরটায় ফেড-ইন
-export type Scene = { id: string; bg: string; duration: number; objects: Obj[]; dialogues: Dialogue[]; skip?: boolean; fade?: boolean; clips?: AudioClip[] };
+export type Scene = { id: string; bg: string; bgView?: { z: number; x: number; y: number }; duration: number; objects: Obj[]; dialogues: Dialogue[]; skip?: boolean; fade?: boolean; clips?: AudioClip[] };
 export type Movie = {
   version: 1; kind: "movie"; id: string; name: string; speed: number; music: string | null;
   musicClip?: { uri: string; name: string }; musicVol?: number; // নিজের ফোনের মিউজিক (থাকলে বিল্ট-ইনের বদলে)
@@ -190,7 +190,7 @@ export function actionAt(o: Obj, a: AssetDef, t: number): Exclude<Action, "auto"
   if (v > 8 && a.actions.includes("walk")) return "walk";
   return a.defaultAction;
 }
-const RATE0: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2, talk: 4, clap: 6, salute: 2, point: 4, thumbsup: 4, namaste: 3, bow: 2.2, shrug: 3, cheer: 7, angry: 5, laugh: 6, cry: 4, scared: 6, think: 2.5, cook: 4, teach: 3, carry: 7, read: 2, write: 4, eat: 4, drink: 3, phone: 4, sleep: 2.5 };
+const RATE0: Record<string, number> = { walk: 7, run: 12, dance: 6, jump: 8, fly: 16, wave: 5, stand: 2, sit: 2, talk: 4, clap: 6, salute: 2, point: 4, thumbsup: 4, namaste: 3, bow: 2.2, shrug: 3, cheer: 7, angry: 5, laugh: 6, cry: 4, scared: 6, think: 2.5, cook: 4, teach: 3, carry: 7, read: 2, write: 4, eat: 4, drink: 3, phone: 4, sleep: 2.5, bless: 3, pranam: 3, pooja: 3.5, arti: 4, sing: 4, sell: 4, weigh: 3, pay: 3, holdhand: 6 };
 // অ্যানিমেশন আগের চেয়ে ~৩০% দ্রুত ও স্বাভাবিক (হাত-পা-মাথার দোলা)
 export const SPEEDUP = 1.3;
 const RATE: Record<string, number> = Object.fromEntries(Object.entries(RATE0).map(([k, v]) => [k, Math.round(v * SPEEDUP * 100) / 100]));
@@ -198,7 +198,7 @@ export const rateOf = (act: string) => RATE[act] ?? 2;
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 1000; return h / 160; };
 export function phaseAt(o: Obj, a: AssetDef, act: string, t: number, speed: number): number {
   const v = speedAt(o, t);
-  const rate = a.cat === "object" && act === "walk" ? clamp(v / 22, 2, 30) : RATE[act] ?? 2;
+  const rate = (a.cat === "object" || a.cat === "vehicle" || a.cat === "market") && act === "walk" ? clamp(v / 22, 2, 30) : RATE[act] ?? 2;
   return t * rate * speed + hash(o.id);
 }
 export function talkAt(s: Scene, objId: string, t: number): number {

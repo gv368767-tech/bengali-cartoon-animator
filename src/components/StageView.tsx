@@ -6,6 +6,7 @@ import { atlasImage, onSpriteLoaded } from "../art/spriteImages";
 import { AssetDef, getBg } from "../art/registry";
 import { Movie, Scene, STAGE_H, STAGE_W } from "../lib/scene";
 import { Item, buildAsset, polyD, sceneItems } from "../lib/render";
+import { isDefaultView, zoomShapes } from "../lib/bgZoom";
 
 const AW = (k: string) => atlasImage(k);
 function node(s: Shape, k: string): React.ReactNode {
@@ -59,9 +60,10 @@ export const Shapes = ({ shapes, p = "s" }: { shapes: Shape[]; p?: string }) => 
   return <>{out}</>;
 };
 
-const Background = memo(({ id }: { id: string }) => {
+const Background = memo(({ id, z = 1, px = 0, py = 0 }: { id: string; z?: number; px?: number; py?: number }) => {
   const bg = getBg(id);
-  return <Shapes shapes={bg.shapes} p="bg" />;
+  const shapes = useMemo(() => (isDefaultView({ z, x: px, y: py }) ? bg.shapes : zoomShapes(bg.shapes, { z, x: px, y: py })), [bg, z, px, py]);
+  return <Shapes shapes={shapes} p="bg" />;
 });
 
 const xf = (it: { x: number; y: number; sx: number; sy: number; rot: number }) => [
@@ -74,7 +76,7 @@ export function StageView({ movie, scene, t, width, selectedId }: { movie: Movie
   return (
     <Canvas style={{ width, height }} opaque>
       <Group transform={[{ scale }]}>
-        <Background id={scene.bg} />
+        <Background id={scene.bg} z={scene.bgView?.z} px={scene.bgView?.x} py={scene.bgView?.y} />
         {items.map((it) => (
           <Group key={it.id} transform={xf(it)}>
             {it.shadow > 0 ? <Oval x={-it.shadow} y={-it.shadow * 0.18} width={it.shadow * 2} height={it.shadow * 0.36} color="black" opacity={0.22} /> : null}
