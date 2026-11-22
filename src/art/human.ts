@@ -6,7 +6,7 @@ export type HumanDef = {
   top: string; top2?: string; bottom: string;
   outfit: "tee" | "frock" | "saree" | "panjabi" | "shirt" | "romper" | "vest";
   lower: "shorts" | "pants" | "lungi" | "none";
-  head: number; shoe: string;
+  head: number; shoe: string; pro?: boolean;
   extras: ("glasses" | "moustache" | "hat" | "gamchha" | "book" | "tie" | "stick" | "bindi")[];
   deco?: (a: Anchors) => Deco; // সাজসজ্জা/অতিরিক্ত হাত/বাহন-ছাড়া অলংকার (দেবদেবী ইত্যাদি) — না থাকলে আগের মতোই
 };
@@ -120,7 +120,7 @@ const shade = (hex: string, k = 0.84) => {
 const VW: Record<View, { wk: number; mv: number }> = { front: { wk: 1, mv: 1 }, q_front: { wk: 0.86, mv: 0.85 }, q_back: { wk: 0.86, mv: 0.85 }, back: { wk: 1, mv: 1 }, side: { wk: 0.56, mv: 1 } };
 
 // ====================== মাথা ও মুখ ======================
-type Face = { headUnder?: Shape[]; headOver?: Shape[]; hx: number; hy: number; r: number; view: View; expr: Expr; eyes: Eyes; mouth: Mouth | null; ph: number; legacyTalk: number; tint?: boolean };
+type Face = { pro?: boolean; browC?: string; headUnder?: Shape[]; headOver?: Shape[]; hx: number; hy: number; r: number; view: View; expr: Expr; eyes: Eyes; mouth: Mouth | null; ph: number; legacyTalk: number; tint?: boolean };
 
 function mouthShapes(S: Shape[], mx: number, my: number, r: number, ws: number, m: Mouth) {
   const o = m.open;
@@ -139,12 +139,18 @@ function faceShapes(S: Shape[], G: Face, ws: number, fcx: number, side: boolean)
   const { hy, r, expr, ph } = G;
   const ex = r * 0.36 * ws, ey = hy + r * 0.05;
   const eyes: Eyes = G.eyes === "open" && false ? "open" : G.eyes;
+  const fcxAll = fcx;
   const closed = eyes === "closed";
   const eyeAt = (x: number, k: number) => {
     if (closed) { S.push(L(x - 7 * k, ey, x + 7 * k, ey, 3, DARK)); return; }
     if (eyes === "happy") { S.push(PA(`M ${f(x - 8 * k)} ${f(ey + 3)} Q ${f(x)} ${f(ey - 10)} ${f(x + 8 * k)} ${f(ey + 3)}`, undefined, DARK, 3.5)); return; }
     if (eyes === "wide") { S.push(C(x, ey, r * 0.2 * k, "#fff"), CS(x, ey, r * 0.2 * k, DARK, 2), C(x, ey, r * 0.09 * k, DARK)); return; }
     const py = eyes === "up" ? -r * 0.07 : eyes === "down" ? r * 0.07 : 0;
+    if (G.pro) {   // প্রো: সাদা অংশ + মণি + পাতার রেখা + ঝিলিক
+      const rx = r * 0.2 * k, ry = r * 0.13 * k, ix = side ? r * 0.06 : (x < fcxAll ? r * 0.025 : -r * 0.025);
+      S.push(E(x, ey, rx, ry, "#fffaf2"), PA(`M ${f(x - rx)} ${f(ey + 1)} Q ${f(x)} ${f(ey - ry * 1.9)} ${f(x + rx)} ${f(ey + 1)}`, undefined, "#2b2230", 2.8), E(x + ix, ey + py * 0.6, r * 0.085 * k, r * 0.1 * k, "#5a3a22"), C(x + ix, ey + py * 0.6, r * 0.05 * k, "#15101a"), C(x + ix + 2, ey + py * 0.6 - 2.5, r * 0.022 * k, "#fff"));
+      return;
+    }
     S.push(C(x, ey + py, r * 0.13 * k, DARK), C(x + 2, ey + py - 2, r * 0.04 * k, "#fff"));
   };
   if (side) eyeAt(fcx + r * 0.0 + ex * 0.0 + r * 0.5 - fcx + fcx, 0.9); // একটি চোখ
@@ -159,9 +165,16 @@ function faceShapes(S: Shape[], G: Face, ws: number, fcx: number, side: boolean)
   };
   if (side) { if (expr === "angry" || expr === "shout") S.push(L(bx[0] - 8, ey - 18, bx[0] + 8, ey - 9, 4, DARK)); else brow(bx[0], 1); }
   else { brow(bx[0], 1); if (expr === "angry" || expr === "shout") S.push(L(bx[1] + 9, ey - 17, bx[1] - 9, ey - 9, 4, DARK)); else if (expr === "sad" || expr === "cry") S.push(L(bx[1] + 9, ey - 10, bx[1] - 9, ey - 18, 4, DARK)); else if (expr === "scared") S.push(L(bx[1] - 8, ey - 21, bx[1] + 8, ey - 21, 3.5, DARK)); else if (expr === "think") S.push(L(bx[1] - 8, ey - 20, bx[1] + 8, ey - 23, 3.5, DARK)); }
+  if (G.pro) {   // স্বাভাবিক ভুরু ও নাক
+    const bc = G.browC ?? "#1b1a1f", by = ey - r * 0.22, up = expr === "angry" || expr === "shout" ? 5 : expr === "sad" || expr === "cry" ? -4 : 0;
+    const brow2 = (x: number, dir: number) => S.push(PA(`M ${f(x - r * 0.2 * ws)} ${f(by + up * dir * 0.6)} Q ${f(x)} ${f(by - 4 - (up ? 0 : 1))} ${f(x + r * 0.2 * ws)} ${f(by - up * dir * 0.6 + 1)}`, undefined, bc, 3.6));
+    if (side) brow2(fcx + r * 0.5 - fcx + fcx, 1); else { brow2(fcx - ex, -1); brow2(fcx + ex, 1); }
+    if (side) S.push(PA(`M ${f(G.hx + r * 0.92)} ${f(hy + r * 0.0)} Q ${f(G.hx + r * 1.08)} ${f(hy + r * 0.28)} ${f(G.hx + r * 0.9)} ${f(hy + r * 0.33)}`, undefined, "#9a6a4a", 2.4));
+    else S.push(PA(`M ${f(fcx - 2)} ${f(hy + r * 0.0)} Q ${f(fcx - r * 0.1)} ${f(hy + r * 0.26)} ${f(fcx + 1)} ${f(hy + r * 0.3)} Q ${f(fcx + r * 0.1)} ${f(hy + r * 0.3)} ${f(fcx + r * 0.12)} ${f(hy + r * 0.26)}`, undefined, "#9a6a4a", 2.4));
+  }
   // গাল
-  if (!side) S.push(C(fcx - r * 0.62 * ws, hy + r * 0.38, r * 0.15, "#ff8a8a", 0.45), C(fcx + r * 0.62 * ws, hy + r * 0.38, r * 0.15, "#ff8a8a", 0.45));
-  if (!side) S.push(E(fcx, hy + r * 0.25, r * 0.08, r * 0.06, "#000", 0.18));
+  if (!side && !G.pro) S.push(C(fcx - r * 0.62 * ws, hy + r * 0.38, r * 0.15, "#ff8a8a", 0.45), C(fcx + r * 0.62 * ws, hy + r * 0.38, r * 0.15, "#ff8a8a", 0.45));
+  if (!side && !G.pro) S.push(E(fcx, hy + r * 0.25, r * 0.08, r * 0.06, "#000", 0.18));
   // কান্নার জল
   if (expr === "cry") for (let i = 0; i < 3; i++) { const t = (ph * 1.4 + i * 0.33) % 1; for (const sx of (side ? [bx[0]] : bx)) S.push(E(sx + (i - 1) * 3, ey + 8 + t * 46, 3.5, 6, "#6ec6ff", 1 - t * 0.7)); }
   // মুখ
@@ -198,6 +211,7 @@ function headShapes(S: Shape[], d: HumanDef, G: Face): void {
   // ---- মাথা ----
   if (G.headUnder) S.push(...G.headUnder);
   S.push(C(hx, hy, r, skin));
+  if (G.pro) S.push(CS(hx, hy, r, "#2b2230", 2.6));
   if (G.headOver) S.push(...G.headOver);
   if (sd) {
     S.push(PO([hx + r * 0.9, hy + r * 0.0, hx + r * 1.14, hy + r * 0.3, hx + r * 0.88, hy + r * 0.34], skin));
@@ -409,6 +423,12 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   else S.push(R(T(-34), -215 + dy, 68 * wk, 112, d.top, 22));
   if (d.extras.includes("tie") && !bk && !sd) S.push(PO([T(-5), -212 + dy, T(5), -212 + dy, T(8), -160 + dy, T(0), -150 + dy, T(-8), -160 + dy], "#c0392b"));
   if (d.extras.includes("gamchha")) S.push(PO([T(-34), -212 + dy, T(-12), -217 + dy, T(38), -108 + dy, T(14), -102 + dy], "#d94141"), L(T(-10), -190 + dy, T(28), -118 + dy, 3, "#fff", 0.8));
+  if (d.pro && !bk) {   // কলার, বোতাম, ভাঁজ
+    const dk = shade(d.top, 0.72), lt = shade(d.top, 1.12);
+    if (d.outfit === "shirt") { S.push(PO([T(-14), -218 + dy, T(0), -196 + dy, T(14), -218 + dy, T(22), -212 + dy, T(0), -176 + dy, T(-22), -212 + dy], lt), PA(`M ${f(T(-14))} ${f(-218 + dy)} L ${f(T(0))} ${f(-196 + dy)} L ${f(T(14))} ${f(-218 + dy)}`, undefined, dk, 2.2), L(T(0), -196 + dy, T(0), -110 + dy, 2, dk)); for (const yy of [-176, -150, -124]) S.push(C(T(0), yy + dy, 2.4, dk)); }
+    if (d.outfit === "tee" || d.outfit === "panjabi") { S.push(PA(`M ${f(T(-12))} ${f(-217 + dy)} Q ${f(T(0))} ${f(-198 + dy)} ${f(T(12))} ${f(-217 + dy)}`, undefined, dk, 2.6)); S.push(L(T(0), -200 + dy, T(0), -166 + dy, 2.2, dk)); }
+    S.push(PA(`M ${f(T(-26))} ${f(-150 + dy)} Q ${f(T(-14))} ${f(-142 + dy)} ${f(T(-18))} ${f(-124 + dy)}`, undefined, dk, 1.8, ), PA(`M ${f(T(24))} ${f(-160 + dy)} Q ${f(T(14))} ${f(-146 + dy)} ${f(T(20))} ${f(-122 + dy)}`, undefined, dk, 1.8));
+  }
   S.push(...props.mid);
   if (dc?.mid) S.push(...dc.mid);
 
@@ -423,14 +443,32 @@ export function humanShapes(d: HumanDef, p: Pose): Shape[] {
   // ---- গলা ও মাথা ----
   S.push(R(hx - 9, -232 + dy + rg.sh * 0.5, 18, 24, skin));
   headShapes(S, d, {
-    headUnder: dc?.headUnder, headOver: dc?.headOver, hx, hy, r, view, expr: rg.expr, eyes: p.blink && rg.eyes === "open" ? "closed" : rg.eyes, ph, legacyTalk: p.mouth ? 0 : p.talk,
+    pro: d.pro, browC: d.hair === "#f2f2f2" ? "#cfcfcf" : d.hair, headUnder: dc?.headUnder, headOver: dc?.headOver, hx, hy, r, view, expr: rg.expr, eyes: p.blink && rg.eyes === "open" ? "closed" : rg.eyes, ph, legacyTalk: p.mouth ? 0 : p.talk,
     mouth: p.mouth ?? (rg.talk && p.talk <= 0.12 ? synth(ph) : null),
   });
   if (rg.headL) arm(pL, shL, false);
   if (rg.headR) arm(pR, shR, false);
   if (dc?.front) S.push(...dc.front);
   S.push(...props.front);
-  return S;
+  return d.pro ? withOutline(S) : S;
+}
+
+// প্রো স্টাইল: পুরো চরিত্রের বাইরের গাঢ় রূপরেখা (সব আকারের নিচে একবার) — জোড়ায় জোড়ায় রেখা পড়ে না
+const OUTC = "#2b2230";
+function withOutline(S: Shape[], w = 3): Shape[] {
+  const under: Shape[] = [];
+  for (const s of S) {
+    if ((s.t !== "grad" && (s as any).op != null && (s as any).op < 0.9)) continue;
+    switch (s.t) {
+      case "rect": if (s.w >= 8 && s.h >= 8) under.push({ ...s, x: s.x - w, y: s.y - w, w: s.w + 2 * w, h: s.h + 2 * w, r: (s.r ?? 0) + w, fill: OUTC }); break;
+      case "circle": if (s.fill && s.r >= 6) under.push({ t: "circle", x: s.x, y: s.y, r: s.r + w, fill: OUTC }); break;
+      case "ellipse": if (s.rx >= 6 && s.ry >= 6) under.push({ ...s, rx: s.rx + w, ry: s.ry + w, fill: OUTC }); break;
+      case "line": if (s.w >= 9) under.push({ ...s, w: s.w + 2 * w, color: OUTC }); break;
+      case "path": if (s.fill) under.push({ t: "path", d: s.d, fill: OUTC, stroke: OUTC, sw: (s.sw ?? 0) + 2 * w }); break;
+      case "poly": { let d = ""; for (let i = 0; i < s.pts.length; i += 2) d += `${i ? "L" : "M"}${f(s.pts[i])} ${f(s.pts[i + 1])} `; under.push({ t: "path", d: d + "Z", fill: OUTC, stroke: OUTC, sw: 2 * w }); break; }
+    }
+  }
+  return [...under, ...S];
 }
 
 const SYN: Mouth["shape"][] = ["A", "E", "O", "M", "A", "U", "E", "C"];
@@ -438,6 +476,9 @@ function synth(ph: number): Mouth { const i = Math.floor(ph * 2.4); return { sha
 
 const SK = { a: "#c98a5b", b: "#d9a066", c: "#b9794c", d: "#cf9163", e: "#c58a5f", f: "#a96d43" };
 export const HUMANS: Record<string, HumanDef> = {
+  // ---- প্রো স্টাইল (রূপরেখা, আসল চোখ-ভুরু, পোশাকের ভাঁজ, স্বাভাবিক অনুপাত) ----
+  p_man: { pro: true, skin: "#efbf99", hair: "#1b1a1f", hairStyle: "short", top: "#9a86b0", bottom: "#4a3f45", outfit: "shirt", lower: "pants", head: 0.8, shoe: "#2a2228", extras: ["moustache"] },
+  p_boy: { pro: true, skin: "#efbf99", hair: "#1b1a1f", hairStyle: "short", top: "#6aa57f", bottom: "#4d3b24", outfit: "tee", lower: "shorts", head: 0.82, shoe: "#2a2228", extras: [] },
   boy: { skin: SK.a, hair: "#1b1b1b", hairStyle: "short", top: "#e63946", bottom: "#2a4d9b", outfit: "tee", lower: "shorts", head: 1, shoe: "#333", extras: [] },
   girl: { skin: SK.b, hair: "#1b1b1b", hairStyle: "pigtails", top: "#ff6fb5", top2: "#ffd1e8", bottom: "#fff", outfit: "frock", lower: "none", head: 1, shoe: "#b5453a", extras: [] },
   kid: { skin: SK.d, hair: "#1b1b1b", hairStyle: "tuft", top: "#ffd23f", top2: "#ff8a3d", bottom: "#ffd23f", outfit: "romper", lower: "shorts", head: 1.35, shoe: "#e63946", extras: [] },

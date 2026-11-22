@@ -94,6 +94,8 @@ export const ASSETS: AssetDef[] = [
   prop("train", "খেলনা ট্রেন", "object", [-135, -115, 135, 8], P.toyTrain, { actions: ["stand", "walk"], shadow: 120, side: true }),
   prop("lattu", "লাটিম", "object", [-35, -100, 35, 8], P.lattu, { actions: ["stand", "dance"], shadow: 22, scale: 1.2 }),
   prop("umbrella", "ছাতা", "object", [-95, -215, 95, 8], P.umbrella, { shadow: 0 }),
+  // প্রো স্টাইল (নমুনা)
+  human("p_man", "প্রো পুরুষ (নমুনা)", 1.1, -330), human("p_boy", "প্রো ছেলে (নমুনা)", 1.05, -330),
   // নতুন চরিত্র (পুজো, বাজার, গান)
   human("priest", "পুরোহিত", 1.1, -330), human("fruit_seller", "ফল বিক্রেতা", 1.1, -330), human("veg_seller", "সবজি বিক্রেতা", 1.05, -330), human("fish_seller", "মাছ বিক্রেতা", 1.1, -330),
   human("shopkeeper", "দোকানদার", 1.1, -330), human("customer", "ক্রেতা (পুরুষ)", 1.05, -330), human("customer_f", "ক্রেতা (মহিলা)", 1.05, -330),
