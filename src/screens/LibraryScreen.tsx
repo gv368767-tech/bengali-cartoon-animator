@@ -7,6 +7,9 @@ import { AssetThumb, BgThumb, Shapes } from "../components/StageView";
 import { buildAsset } from "../lib/render";
 import { ACTION_BN, C } from "../lib/theme";
 import type { Action } from "../art/shapes";
+import * as DocumentPicker from "expo-document-picker";
+import { Alert } from "react-native";
+import { deleteUserChar, importCharacterImage } from "../lib/userChars";
 
 function Preview({ id, action }: { id: string; action: Exclude<Action, "auto"> }) {
   const a = getAsset(id)!;
@@ -26,6 +29,14 @@ export default function LibraryScreen({ onBack }: { onBack: () => void }) {
   const [sel, setSel] = useState<string | null>(null);
   const [act, setAct] = useState<Exclude<Action, "auto">>("stand");
   const [q, setQ] = useState("");
+  const [, force] = useState(0);
+  const addPhoto = async () => {
+    try {
+      const r = await DocumentPicker.getDocumentAsync({ type: "image/*", copyToCacheDirectory: true }); if (r.canceled || !r.assets?.[0]) return;
+      const a = r.assets[0]; const res = await importCharacterImage(a.uri, (a.name ?? "আমার চরিত্র").replace(/\.[^.]+$/, ""));
+      setCat("photo"); force((n) => n + 1); Alert.alert("চরিত্র যোগ হয়েছে", `${res.added.length}টি চরিত্র লাইব্রেরির "আমার ছবির চরিত্র" ট্যাবে যোগ হয়েছে।${res.notes.length ? "\n" + res.notes.join("\n") : ""}`);
+    } catch (e: any) { Alert.alert("যোগ করা যায়নি", String(e?.message ?? e)); }
+  };
   const a = sel ? getAsset(sel) : null;
   const qq = q.trim().toLowerCase();
   // খোঁজ: নাম মিললে সব ধরনের মধ্যে থেকে দেখায়; না থাকলে নির্বাচিত ধরনের তালিকা
@@ -35,6 +46,7 @@ export default function LibraryScreen({ onBack }: { onBack: () => void }) {
   return (
     <View style={s.root}>
       <View style={s.top}><TouchableOpacity onPress={onBack}><Text style={s.back}>← ফিরুন</Text></TouchableOpacity><Text style={s.t}>অ্যাসেট লাইব্রেরি</Text></View>
+      <TouchableOpacity onPress={addPhoto} style={{ backgroundColor: C.accent, margin: 10, marginBottom: 0, padding: 12, borderRadius: 10, alignItems: "center" }}><Text style={{ color: "#111", fontWeight: "800" }}>➕ নিজের ছবি থেকে চরিত্র যোগ করুন (স্বচ্ছ PNG)</Text></TouchableOpacity>
       <TextInput value={q} onChangeText={setQ} placeholder="🔎 খুঁজুন (যেমন: মন্দির, নদী, গাড়ি)" placeholderTextColor={C.dim} style={s.search} />
       <ScrollView horizontal style={{ flexGrow: 0 }} showsHorizontalScrollIndicator={false}>
         {CATS.map((c) => <TouchableOpacity key={c.id} onPress={() => { setCat(c.id); setSel(null); }} style={[s.tab, cat === c.id && { backgroundColor: C.accent }]}><Text style={{ color: cat === c.id ? "#111" : C.text, fontWeight: "700" }}>{c.name}</Text></TouchableOpacity>)}

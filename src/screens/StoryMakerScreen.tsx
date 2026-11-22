@@ -17,6 +17,7 @@ const SAMPLE = `একদিন রাহুল নামের একটি ছ
 export default function StoryMakerScreen({ onBack, onOpen }: { onBack: () => void; onOpen: (m: Movie) => void }) {
   const [text, setText] = useState(""), [title, setTitle] = useState("");
   const [mins, setMins] = useState(1), [music, setMusic] = useState(true), [vol, setVol] = useState(0.3), [voices, setVoices] = useState(true), [narrate, setNarrate] = useState(true);
+  const [style, setStyle] = useState<"simple" | "pro" | "photo">("simple");
   const [busy, setBusy] = useState(false), [pct, setPct] = useState(0), [msg, setMsg] = useState("");
   const cancel = useRef(false);
   const plan = useMemo<StoryPlan | { err: string } | null>(() => { if (text.trim().length < 5) return null; try { return planStory(text); } catch (e: any) { return { err: String(e?.message ?? e) }; } }, [text]);
@@ -26,7 +27,7 @@ export default function StoryMakerScreen({ onBack, onOpen }: { onBack: () => voi
     setBusy(true); setPct(0); cancel.current = false;
     try {
       const r = await buildStoryMovie(ok, title.trim() || "আমার গল্প", {
-        seconds: mins * 60, music, musicVol: vol, voices, narrate, makeVoice: (t, rate, pitch, variant) => makeVoice(t, rate, pitch, variant),
+        seconds: mins * 60, style, music, musicVol: vol, voices, narrate, makeVoice: (t, rate, pitch, variant) => makeVoice(t, rate, pitch, variant),
         sfx: async (id) => { try { const d = SFX[id as SfxId]; return d ? { uri: await sfxFile(id as SfxId), dur: d.dur, name: d.name } : null; } catch { return null; } },
         progress: (p, t) => { setPct(p); setMsg(t); }, cancelled: () => cancel.current,
       });
@@ -46,6 +47,9 @@ export default function StoryMakerScreen({ onBack, onOpen }: { onBack: () => voi
       <Text style={s.h2}>ভিডিওর সময়</Text>
       <View style={s.row}>{[1, 2, 3, 4, 5].map((n) => <Chip key={n} on={mins === n} label={`${n} মিনিট`} onPress={() => setMins(n)} />)}</View>
       <Text style={s.dim}>গল্প ছোট হলে ভিডিও লক্ষ্যের চেয়ে ছোট হবে; বড় হলে শেষ অংশ বাদ যাবে — সবসময় জানিয়ে দেওয়া হয়।</Text>
+      <Text style={s.h2}>চরিত্রের স্টাইল</Text>
+      <View style={s.row}><Chip on={style === "simple"} label="সরল" onPress={() => setStyle("simple")} /><Chip on={style === "pro"} label="প্রো (ছেলে/পুরুষ)" onPress={() => setStyle("pro")} /><Chip on={style === "photo"} label="আমার ছবি (ছেলে/পুরুষ)" onPress={() => setStyle("photo")} /></View>
+      <Text style={s.dim}>"আমার ছবি" চরিত্র বসা ভঙ্গির ছবি, তাই কথোপকথনের গল্পে ভালো মানায়। বাকি চরিত্র (মহিলা, বৃদ্ধ, দেবতা ইত্যাদি) সরল স্টাইলেই থাকে।</Text>
       <Text style={s.h2}>শব্দ</Text>
       <View style={s.row}>
         <Chip on={voices} label="🗣 কণ্ঠ" onPress={() => setVoices(!voices)} /><Chip on={narrate} label="📖 বর্ণনা পড়া" onPress={() => setNarrate(!narrate)} />

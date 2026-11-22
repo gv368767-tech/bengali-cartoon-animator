@@ -5,12 +5,13 @@ import { ANIMALS, quadShapes } from "./animal";
 import { BIRDS, birdShapes } from "./bird";
 import * as P from "./props";
 import * as V from "./vehicles";
+import { PHOTO_ACTIONS, PhotoDef, photoBounds, photoShapes } from "./photoChar";
 import { ANIMS } from "./anim";
 import { DEITY_LIST } from "./deity";
 import { BACKGROUNDS } from "./backgrounds";
 import { SPRITE_LIST, spriteShapes } from "./sprite";
 
-export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu" | "style2" | "vehicle" | "temple" | "market" | "stage";
+export type Cat = "bg" | "nature" | "human" | "animal" | "bird" | "object" | "hindu" | "style2" | "vehicle" | "temple" | "market" | "stage" | "photo";
 export type AssetDef = {
   id: string; name: string; cat: Cat;
   layer: "back" | "ground";           // back = সূর্য/মেঘ/পাহাড় (গভীরতা-স্কেল নেই)
@@ -19,6 +20,7 @@ export type AssetDef = {
   shadow: number;                      // ছায়ার প্রস্থ (0 = নেই)
   side: boolean;                       // পাশ-মুখী (চলার দিকে ঘুরবে)
   talk: boolean;
+  atlasKey?: string;                  // ছবি-চরিত্রের ফাইল-চাবি (এক্সপোর্টে ছবির পথ লাগে)
   rig?: "human" | "sprite";                       // মানুষের হাড়-রিগ (সব অ্যানিমেশন/ভিউ/লিপ-সিঙ্ক)
   bounds: [number, number, number, number];
   build: (p: Pose) => Shape[];
@@ -53,6 +55,10 @@ const prop = (id: string, name: string, cat: Cat, b: [number, number, number, nu
   id, name, cat, layer: "ground", scale: 1, defaultY: 600, actions: ["stand"], defaultAction: "stand", shadow: 0, side: false, talk: false, bounds: b, build, ...o,
 });
 
+export const photoAssetOf = (d: PhotoDef, cat: Cat = "photo"): AssetDef => ({
+  id: d.id, name: d.name, cat, layer: "ground", scale: 1, defaultY: 600, actions: PHOTO_ACTIONS, defaultAction: "stand", shadow: Math.round((d.w / d.h) * (d.hgt ?? 330) * 0.35), side: false, talk: true,
+  atlasKey: d.key, bounds: photoBounds(d), build: (p) => photoShapes(d, p),
+});
 const veh = (id: string, name: string, build: (p: Pose) => Shape[], w: number, top = 190): AssetDef => prop(id, name, "vehicle", [-w - 20, -top, w + 30, 8], build, { actions: ["stand", "walk"], side: true, shadow: w, scale: 1 });
 const mk = (id: string, name: string, build: (p: Pose) => Shape[], b: [number, number, number, number], o: Partial<AssetDef> = {}): AssetDef => prop(id, name, o.cat ?? "market", b, build, o);
 
@@ -94,6 +100,8 @@ export const ASSETS: AssetDef[] = [
   prop("train", "খেলনা ট্রেন", "object", [-135, -115, 135, 8], P.toyTrain, { actions: ["stand", "walk"], shadow: 120, side: true }),
   prop("lattu", "লাটিম", "object", [-35, -100, 35, 8], P.lattu, { actions: ["stand", "dance"], shadow: 22, scale: 1.2 }),
   prop("umbrella", "ছাতা", "object", [-95, -215, 95, 8], P.umbrella, { shadow: 0 }),
+  // আপনার নিজের আঁকা ছবির চরিত্র
+  photoAssetOf({ id: "ub_boy", name: "ছেলে (আপনার ছবি)", key: "ub_boy", w: 458, h: 640, hgt: 300 }), photoAssetOf({ id: "ub_man", name: "গোঁফওয়ালা পুরুষ (আপনার ছবি)", key: "ub_man", w: 488, h: 640, hgt: 330 }),
   // প্রো স্টাইল (নমুনা)
   human("p_man", "প্রো পুরুষ (নমুনা)", 1.1, -330), human("p_boy", "প্রো ছেলে (নমুনা)", 1.05, -330),
   // নতুন চরিত্র (পুজো, বাজার, গান)
@@ -126,5 +134,5 @@ export const getBg = (id: string) => BACKGROUNDS.find((b) => b.id === id) ?? vid
 export const TOTAL_ASSETS = ASSETS.length + BACKGROUNDS.length;
 export const CATS: { id: Cat; name: string }[] = [
   { id: "bg", name: "ব্যাকগ্রাউন্ড" }, { id: "human", name: "মানুষ" }, { id: "animal", name: "প্রাণী" },
-  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" }, { id: "vehicle", name: "যানবাহন" }, { id: "market", name: "বাজার" }, { id: "temple", name: "মন্দির ও পুজো" }, { id: "stage", name: "মঞ্চ ও গান" }, { id: "style2", name: "নতুন স্টাইল" },
+  { id: "bird", name: "পাখি" }, { id: "nature", name: "প্রকৃতি" }, { id: "object", name: "বস্তু" }, { id: "hindu", name: "হিন্দু দেবদেবী" }, { id: "photo", name: "আমার ছবির চরিত্র" }, { id: "vehicle", name: "যানবাহন" }, { id: "market", name: "বাজার" }, { id: "temple", name: "মন্দির ও পুজো" }, { id: "stage", name: "মঞ্চ ও গান" }, { id: "style2", name: "নতুন স্টাইল" },
 ];

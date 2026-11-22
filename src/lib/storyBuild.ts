@@ -6,13 +6,15 @@ import type { Char, Ride, StoryPlan, Unit } from "./storyPlan";
 
 export type VoiceFn = (text: string, rate: number, pitch: number, variant: number) => Promise<{ uri: string; dur: number }>;
 export type SfxFn = (id: string) => Promise<{ uri: string; dur: number; name: string } | null>;
-export type BuildOpts = { seconds: number; music: boolean; musicVol: number; narrate: boolean; voices: boolean; makeVoice?: VoiceFn; sfx?: SfxFn; progress?: (p: number, msg: string) => void; cancelled?: () => boolean };
+export type BuildOpts = { seconds: number; music: boolean; musicVol: number; narrate: boolean; voices: boolean; style?: "simple" | "pro" | "photo"; makeVoice?: VoiceFn; sfx?: SfxFn; progress?: (p: number, msg: string) => void; cancelled?: () => boolean };
 export type BuildResult = { movie: Movie; seconds: number; notes: string[]; scenes: number; voiced: number };
 
 // বেশি পিচ-বদল কণ্ঠ বিকৃত করে, তাই কম রেঞ্জ; আলাদা স্বর মূলত আলাদা ইনস্টল-করা কণ্ঠ (variant) থেকে আসে
 const PITCH: Record<string, number> = { boy: 1.08, girl: 1.18, kid: 1.3, man: 0.92, woman: 1.08, elder: 0.86, elderF: 1.0, deity: 0.9, animal: 1.0 };
 const VARIANT: Record<string, number> = { boy: 0, man: 0, elder: 0, deity: 0, animal: 0, girl: 1, woman: 1, kid: 1, elderF: 1 };
 export const MAX_SECONDS = 300;
+const STYLE_MAP: Record<string, Record<string, string>> = { pro: { boy: "p_boy", man: "p_man" }, photo: { boy: "ub_boy", man: "ub_man" } };
+export const styledAsset = (asset: string, style?: string) => (style && STYLE_MAP[style]?.[asset] && getAsset(STYLE_MAP[style][asset]) ? STYLE_MAP[style][asset] : asset);
 
 const RIDE_ASSET = (r: Ride, role: string): string => {
   const girl = role === "girl" || role === "woman" || role === "kid" || role === "elderF";
@@ -66,7 +68,7 @@ export async function buildStoryMovie(plan: StoryPlan, name: string, o: BuildOpt
   // ৩) চরিত্র
   let m = newMovie(name); m = { ...m, music: o.music ? plan.mood : null, musicVol: o.music ? o.musicVol : undefined };
   const castOf = new Map<string, string>();
-  for (const c of plan.chars) { const a = getAsset(c.role.asset); if (a?.rig === "human") { const id = uid(); m = { ...m, cast: [...m.cast, { id, assetId: c.role.asset, name: c.name }] }; if (c.role.look) m = setLook(m, id, c.role.look as any); castOf.set(c.id, id); } }
+  for (const c of plan.chars) { const aid = styledAsset(c.role.asset, o.style); const a = getAsset(aid); if (a?.rig === "human") { const id = uid(); m = { ...m, cast: [...m.cast, { id, assetId: aid, name: c.name }] }; if (c.role.look && aid === c.role.asset) m = setLook(m, id, c.role.look as any); castOf.set(c.id, id); } }
   // ৪) দৃশ্য
   let total = 0; let sIdx = 0;
   for (const sc of scenes) {
@@ -78,7 +80,7 @@ export async function buildStoryMovie(plan: StoryPlan, name: string, o: BuildOpt
     for (const u of sc.units) { const ids = u.kind === "say" ? [u.who] : u.chars; for (const id of ids) if (!inScene.includes(id)) inScene.push(id); if (u.kind === "narr" && u.ride) for (const id of u.chars.slice(0, 1)) if (!rides.has(id)) rides.set(id, u.ride); }
     const xs = slots(inScene.length); const obj = new Map<string, string>(); const asset = new Map<string, string>(); const pos = new Map<string, number>();
     inScene.forEach((id, i) => {
-      const c = chById.get(id) as Char; const rd = rides.get(id); const aid = rd ? RIDE_ASSET(rd, c.role.key) : c.role.asset; const a = getAsset(aid)!;
+      const c = chById.get(id) as Char; const rd = rides.get(id); const aid = rd ? RIDE_ASSET(rd, c.role.key) : styledAsset(c.role.asset, o.style); const a = getAsset(aid)!;
       const r = addObject(m, sid, aid, a.rig === "human" ? castOf.get(id) : undefined); m = r.movie; obj.set(id, r.objId); asset.set(id, aid); pos.set(id, rd ? Math.max(180, xs[i] - 300) : xs[i]);
       m = updateScene(m, sid, (s) => updateObj(s, r.objId, (ob) => ({ ...ob, flip: xs[i] > 640 && inScene.length > 1, keys: [{ ...ob.keys[0], x: rd ? Math.max(180, xs[i] - 300) : xs[i], y: 600 }] })));
       if (a.rig) m = updateScene(m, sid, (s) => updateObj(s, r.objId, (ob) => setView(ob, 0, "q_front")));

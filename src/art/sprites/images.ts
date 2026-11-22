@@ -1,5 +1,7 @@
 // প্রতিটি অ্যাটলাস ছবি (অফলাইন, অ্যাপের ভেতরেই)
 export const ATLAS: Record<string, number> = {
+  ub_boy: require("../../../assets/sprites/ub_boy.png"),
+  ub_man: require("../../../assets/sprites/ub_man.png"),
   boy_front: require("../../../assets/sprites/boy_front.webp"),
   boy_q: require("../../../assets/sprites/boy_q.webp"),
   boy_side: require("../../../assets/sprites/boy_side.webp"),
